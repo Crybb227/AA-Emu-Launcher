@@ -1,9 +1,9 @@
 name: Build and Release Launcher
 
-# Publishes a delta-updatable release: builds the launcher, generates a manifest.json
-# (relative path + sha256 + size for every output file) and uploads each file as a
-# flattened, individually-named release asset so GitHubReleaseUpdater can download
-# only the files that changed since the previous version.
+# Publishes a friend-friendly portable ZIP plus delta-update assets.
+# Friends should download AAEmu-Launcher-vX.X.X.X.zip, extract it, and run
+# "Start Launcher.bat". The flattened files and manifest.json are still uploaded
+# so GitHubReleaseUpdater can download only changed files after install.
 
 on:
   push:
@@ -56,12 +56,16 @@ jobs:
       - name: Build (Release)
         run: msbuild AAEmu-Launcher.sln /p:Configuration=Release /p:Platform="Any CPU" /m
 
-      - name: Generate manifest and flatten release assets
+      - name: Generate delta assets and portable ZIP
         shell: pwsh
         run: |
           $outDir = "AAEmu.Launcher/bin/Release"
           $stagingDir = "release-assets"
+          $packageRoot = "portable-package"
+          $packageDir = Join-Path $packageRoot "AAEmu-Launcher"
+          $zipName = "AAEmu-Launcher-v${{ steps.version.outputs.version }}.zip"
           New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
+          New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
 
           $manifestFiles = @()
           Get-ChildItem -Path $outDir -Recurse -File | ForEach-Object {
@@ -84,9 +88,40 @@ jobs:
           }
           $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $stagingDir "manifest.json")
 
+          Copy-Item -Path "$outDir/*" -Destination $packageDir -Recurse -Force
+
+          @'
+          @echo off
+          cd /d "%~dp0"
+          start "" "AAEmu.Launcher.exe"
+          '@ | Set-Content -Path (Join-Path $packageDir "Start Launcher.bat") -Encoding ASCII
+
+          @"
+          AAEmu Launcher v${{ steps.version.outputs.version }}
+
+          How to start:
+          1. Extract this ZIP somewhere writable, such as your Desktop or Documents folder.
+          2. Double-click "Start Launcher.bat".
+          3. Pick a game tab, open Settings if you want to change install paths or download URLs, then click Install or Play.
+
+          Notes:
+          - Do not run the launcher directly from inside the ZIP. Extract it first.
+          - Keep all files in this folder together.
+          - The launcher includes the helper files it needs for client extraction.
+          - If Windows SmartScreen appears, choose More info, then Run anyway if you trust this release.
+          "@ | Set-Content -Path (Join-Path $packageDir "README-FIRST.txt") -Encoding UTF8
+
+          Compress-Archive -Path (Join-Path $packageDir "*") -DestinationPath (Join-Path $stagingDir $zipName) -Force
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: "Launcher v${{ steps.version.outputs.version }}"
+          body: |
+            ## Download
+
+            Download **AAEmu-Launcher-v${{ steps.version.outputs.version }}.zip**, extract it, then run **Start Launcher.bat**.
+
+            The other release assets are used by the launcher's built-in delta updater.
           files: release-assets/*
           generate_release_notes: true

@@ -116,6 +116,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Helpers.cs" />
+    <Compile Include="ClientDeltaUpdater.cs" />
     <Compile Include="ClientDownloadForm.cs">
       <SubType>Form</SubType>
     </Compile>

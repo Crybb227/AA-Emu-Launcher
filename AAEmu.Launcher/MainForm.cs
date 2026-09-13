@@ -15,6 +15,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace AAEmu.Launcher
@@ -42,6 +43,8 @@ namespace AAEmu.Launcher
 
         public partial class LauncherFileSettings
         {
+            public const string DefaultAAClientDownloadLocation = "https://drive.google.com/drive/folders/1_pIBVHIm1YFal-nteGaVuXjTv3Yrsv4Q";
+
             [JsonProperty("configVersion", NullValueHandling = NullValueHandling.Ignore)]
             public int ConfigVersion { get; set; } = 0;
 
@@ -56,6 +59,18 @@ namespace AAEmu.Launcher
 
             [JsonProperty("pathToGame", NullValueHandling = NullValueHandling.Ignore)]
             public string PathToGame { get; set; } = string.Empty;
+
+            [JsonProperty("aaPath", NullValueHandling = NullValueHandling.Ignore)]
+            public string AAPath { get; set; } = string.Empty;
+
+            [JsonProperty("aaDownloadLocation", NullValueHandling = NullValueHandling.Ignore)]
+            public string AADownloadLocation { get; set; } = DefaultAAClientDownloadLocation;
+
+            [JsonProperty("wowPath", NullValueHandling = NullValueHandling.Ignore)]
+            public string WoWPath { get; set; } = string.Empty;
+
+            [JsonProperty("wowDownloadLocation", NullValueHandling = NullValueHandling.Ignore)]
+            public string WoWDownloadLocation { get; set; } = string.Empty;
 
             [JsonProperty("serverIPAddress", NullValueHandling = NullValueHandling.Ignore)]
             public string ServerIpAddress { get; set; } = "127.0.0.1";
@@ -120,6 +135,10 @@ namespace AAEmu.Launcher
                 setting.Lang = settingsLangEN_US;
                 setting.LauncherLang = settingsLangEN_US;
                 setting.PathToGame = "";
+                setting.AAPath = "";
+                setting.AADownloadLocation = DefaultAAClientDownloadLocation;
+                setting.WoWPath = "";
+                setting.WoWDownloadLocation = "";
                 setting.ServerIpAddress = "127.0.0.1";
                 setting.SaveLoginAndPassword = false;
                 setting.SkipIntro = false;
@@ -496,6 +515,19 @@ namespace AAEmu.Launcher
         private readonly Color ModernMutedText = Color.FromArgb(145, 157, 172);
         private Label lBrandTitle;
         private Label lBrandSubtitle;
+        private Panel pGameHeader;
+        private Label lGameArcheAge;
+        private Label lGameJasonWoW;
+        private Label lGamePlaceholder;
+        private Label lInstallStatus;
+        private Label lClientUpdateAction;
+        private Label lDownloadLocationLabel;
+        private TextBox eDownloadLocation;
+        private Label lHeroTitle;
+        private Label lHeroNewsTitle;
+        private Label lHeroNewsBody;
+        private string selectedGameId = "aa";
+        private bool isClientDeltaUpdating = false;
 
 
         public LauncherForm()
@@ -507,6 +539,8 @@ namespace AAEmu.Launcher
         private void ApplyModernTheme()
         {
             Text = "Jason AA Launcher";
+            ClientSize = new Size(1280, 720);
+            CenterToScreen();
             BackColor = ModernBack;
             ForeColor = ModernText;
             BackgroundImage = null;
@@ -542,6 +576,8 @@ namespace AAEmu.Launcher
                 Text = "AAEmu client launcher, patcher, and server profile"
             };
 
+            CreateBattleNetShellControls();
+
             Controls.Add(lBrandTitle);
             Controls.Add(lBrandSubtitle);
             lBrandTitle.BringToFront();
@@ -564,7 +600,8 @@ namespace AAEmu.Launcher
             StyleModernLabel(lPassword, ModernMutedText, 9F);
             StyleModernLabel(lIPAddress, ModernMutedText, 9F);
             StyleModernLabel(lPathToGameLabel, ModernMutedText, 9F);
-            StyleModernLabel(lGamePath, ModernText, 9F);
+            StyleModernLabel(lDownloadLocationLabel, ModernMutedText, 9F);
+            StylePathValueLabel(lGamePath);
             StyleModernLabel(lDownloadClient, ModernAccent, 9F);
             StyleModernLabel(lGameClientType, ModernAccent, 9F);
             StyleModernLabel(lPatchProgressBarText, ModernText, 11F);
@@ -609,6 +646,12 @@ namespace AAEmu.Launcher
             lLoadedConfig.ForeColor = ModernAccent;
             lLoadedConfig.Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
             lDownloadLauncherUpdate.ForeColor = Color.FromArgb(250, 210, 90);
+            lAppVersion.Location = new Point(28, 674);
+            lLoadedConfig.Location = new Point(28, 648);
+            btnLocaleLang.Location = new Point(1134, 22);
+            btnLauncherLangChange.Location = new Point(1174, 22);
+            btnDiscord.Location = new Point(1214, 22);
+            btnGithub.Location = new Point(1244, 22);
 
             StyleContextMenu(cmsAAEmuButton);
             StyleContextMenu(cmsGitHub);
@@ -617,7 +660,337 @@ namespace AAEmu.Launcher
             StyleContextMenu(cmsDiscord);
             StyleContextMenu(cmsAuthType);
 
+            LayoutBattleNetShell();
             ApplyModernPlayButton(serverCheckStatus, false);
+        }
+
+        private void CreateBattleNetShellControls()
+        {
+            pGameHeader = new Panel
+            {
+                BackColor = Color.FromArgb(14, 17, 24),
+                Location = new Point(0, 0),
+                Size = new Size(ClientSize.Width, 122),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            };
+            pGameHeader.MouseDown += LauncherForm_MouseDown;
+            pGameHeader.MouseMove += LauncherForm_MouseMove;
+            pGameHeader.MouseUp += LauncherForm_MouseUp;
+
+            var lLogo = CreateHeaderTab("AA", new Point(22, 18), false);
+            lLogo.Font = new Font("Segoe UI Semibold", 18F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            lLogo.ForeColor = Color.FromArgb(72, 155, 255);
+            lLogo.Size = new Size(54, 40);
+            lGameArcheAge = CreateGameIcon("AA", new Point(144, 64), true);
+            lGameArcheAge.Click += (s, e) => SelectLauncherGame("aa");
+            lGameJasonWoW = CreateGameIcon("JW", new Point(210, 64), false);
+            lGameJasonWoW.Click += (s, e) => SelectLauncherGame("jw");
+            lGamePlaceholder = CreateGameIcon("+", new Point(276, 64), false);
+
+            pGameHeader.Controls.Add(lLogo);
+            pGameHeader.Controls.Add(lGameArcheAge);
+            pGameHeader.Controls.Add(lGameJasonWoW);
+            pGameHeader.Controls.Add(lGamePlaceholder);
+            Controls.Add(pGameHeader);
+            pGameHeader.SendToBack();
+
+            lInstallStatus = new Label
+            {
+                AutoSize = false,
+                BackColor = Color.Transparent,
+                ForeColor = ModernMutedText,
+                Font = new Font("Segoe UI", 9.5F, FontStyle.Regular, GraphicsUnit.Point, 0),
+                Location = new Point(28, 616),
+                Size = new Size(242, 44),
+                TextAlign = ContentAlignment.TopLeft
+            };
+
+            lClientUpdateAction = new Label
+            {
+                AutoSize = false,
+                BackColor = Color.FromArgb(45, 52, 66),
+                Cursor = Cursors.Hand,
+                ForeColor = ModernText,
+                Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold, GraphicsUnit.Point, 0),
+                Location = new Point(28, 566),
+                Size = new Size(242, 34),
+                Text = "Check Client Updates",
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            lClientUpdateAction.Click += LClientUpdateAction_Click;
+
+            lDownloadLocationLabel = new Label
+            {
+                AutoSize = false,
+                BackColor = Color.Transparent,
+                ForeColor = ModernMutedText,
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 0),
+                Text = "Download Location"
+            };
+
+            eDownloadLocation = new TextBox
+            {
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = Color.FromArgb(22, 27, 36),
+                ForeColor = ModernText,
+                Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point, 0)
+            };
+
+            lHeroTitle = CreateSurfaceLabel("ARCHEAGE", new Point(28, 188), new Size(242, 96), 24F, ModernText, ContentAlignment.MiddleCenter);
+            lHeroTitle.Font = new Font("Segoe UI Semibold", 24F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            lHeroNewsTitle = CreateSurfaceLabel("News & Updates", new Point(900, 206), new Size(300, 32), 12F, ModernMutedText, ContentAlignment.MiddleLeft);
+            lHeroNewsBody = CreateSurfaceLabel("Install, patch, and launch private server clients from one place.", new Point(900, 238), new Size(300, 128), 12F, ModernText, ContentAlignment.TopLeft);
+            Controls.Add(lInstallStatus);
+            Controls.Add(lClientUpdateAction);
+            panelSettings.Controls.Add(lDownloadLocationLabel);
+            panelSettings.Controls.Add(eDownloadLocation);
+            Controls.Add(lHeroTitle);
+            Controls.Add(lHeroNewsTitle);
+            Controls.Add(lHeroNewsBody);
+
+            lInstallStatus.BringToFront();
+            lClientUpdateAction.BringToFront();
+            SelectLauncherGame(selectedGameId);
+        }
+
+        private void SelectLauncherGame(string gameId)
+        {
+            SaveSelectedGameFields();
+            selectedGameId = gameId;
+            var isAa = selectedGameId == "aa";
+
+            SetGameIconSelected(lGameArcheAge, isAa);
+            SetGameIconSelected(lGameJasonWoW, !isAa);
+
+            lHeroTitle.Text = isAa ? "ARCHEAGE" : "JASONWOW";
+            lHeroNewsTitle.Text = isAa ? "News & Updates" : "JasonWoW";
+            lHeroNewsBody.Text = isAa
+                ? "Install, patch, and launch private server clients from one place."
+                : "JasonWoW is selected. Add its install/update profile next.";
+            LoadSelectedGameFields();
+            UpdateInstallStatus();
+            UpdatePlayButton(serverCheckStatus, false);
+            Invalidate(true);
+        }
+
+        private string SelectedGameDisplayName => selectedGameId == "jw" ? "WoW" : "AA";
+
+        private string GetSelectedGamePath()
+        {
+            return selectedGameId == "jw" ? Setting.WoWPath : GetAAPath();
+        }
+
+        private string GetSelectedDownloadLocation()
+        {
+            return selectedGameId == "jw" ? Setting.WoWDownloadLocation : GetAADownloadLocation();
+        }
+
+        private string GetAAPath()
+        {
+            return string.IsNullOrWhiteSpace(Setting.AAPath) ? Setting.PathToGame : Setting.AAPath;
+        }
+
+        private string GetAADownloadLocation()
+        {
+            if (!string.IsNullOrWhiteSpace(Setting.AADownloadLocation))
+                return Setting.AADownloadLocation;
+            if (!string.IsNullOrWhiteSpace(Setting.ServerGameUpdateURL))
+                return Setting.ServerGameUpdateURL;
+            return LauncherFileSettings.DefaultAAClientDownloadLocation;
+        }
+
+        private bool IsDefaultAAClientDownloadLocation(string downloadLocation)
+        {
+            return selectedGameId == "aa" &&
+                (string.IsNullOrWhiteSpace(downloadLocation) ||
+                 string.Equals(downloadLocation.TrimEnd('/'), LauncherFileSettings.DefaultAAClientDownloadLocation, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private void SetSelectedGamePath(string path)
+        {
+            if (selectedGameId == "jw")
+            {
+                Setting.WoWPath = path;
+            }
+            else
+            {
+                Setting.AAPath = path;
+                Setting.PathToGame = path;
+            }
+        }
+
+        private void SetSelectedDownloadLocation(string url)
+        {
+            if (selectedGameId == "jw")
+            {
+                Setting.WoWDownloadLocation = url;
+            }
+            else
+            {
+                Setting.AADownloadLocation = url;
+                Setting.ServerGameUpdateURL = url;
+            }
+        }
+
+        private void SaveSelectedGameFields()
+        {
+            if (lGamePath == null || eDownloadLocation == null)
+                return;
+
+            SetSelectedGamePath(lGamePath.Text.Trim());
+            SetSelectedDownloadLocation(eDownloadLocation.Text.Trim());
+        }
+
+        private void LoadSelectedGameFields()
+        {
+            if (lGamePath == null || eDownloadLocation == null || lPathToGameLabel == null || lDownloadLocationLabel == null)
+                return;
+
+            lPathToGameLabel.Text = SelectedGameDisplayName + " Path";
+            lDownloadLocationLabel.Text = SelectedGameDisplayName + " Download Location";
+            lGamePath.Text = GetSelectedGamePath();
+            eDownloadLocation.Text = GetSelectedDownloadLocation();
+            if (selectedGameId == "jw")
+                lGameClientType.Text = "JasonWoW";
+            else
+                UpdateGameClientTypeLabel();
+        }
+
+        private void SetGameIconSelected(Label label, bool selected)
+        {
+            label.BackColor = selected ? Color.FromArgb(42, 47, 62) : Color.Transparent;
+            label.BorderStyle = selected ? BorderStyle.FixedSingle : BorderStyle.None;
+            label.ForeColor = selected ? Color.FromArgb(248, 205, 99) : Color.FromArgb(139, 174, 166);
+        }
+
+        private Label CreateGameIcon(string text, Point location, bool selected)
+        {
+            return new Label
+            {
+                AutoSize = false,
+                BackColor = selected ? Color.FromArgb(42, 47, 62) : Color.Transparent,
+                BorderStyle = selected ? BorderStyle.FixedSingle : BorderStyle.None,
+                Cursor = Cursors.Hand,
+                ForeColor = selected ? Color.FromArgb(248, 205, 99) : Color.FromArgb(139, 174, 166),
+                Font = new Font("Segoe UI Semibold", 14F, FontStyle.Bold, GraphicsUnit.Point, 0),
+                Location = location,
+                Size = new Size(56, 44),
+                Text = text,
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+        }
+
+        private Label CreateHeaderTab(string text, Point location, bool selected)
+        {
+            return new Label
+            {
+                AutoSize = false,
+                BackColor = selected ? Color.FromArgb(32, 39, 52) : Color.Transparent,
+                Cursor = Cursors.Hand,
+                ForeColor = selected ? ModernText : ModernMutedText,
+                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold, GraphicsUnit.Point, 0),
+                Location = location,
+                Size = new Size(112, 36),
+                Text = text,
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+        }
+
+        private Label CreateSurfaceLabel(string text, Point location, Size size, float fontSize, Color foreColor, ContentAlignment alignment)
+        {
+            return new Label
+            {
+                AutoSize = false,
+                BackColor = Color.Transparent,
+                ForeColor = foreColor,
+                Font = new Font("Segoe UI Semibold", fontSize, FontStyle.Bold, GraphicsUnit.Point, 0),
+                Location = location,
+                Size = size,
+                Text = text,
+                TextAlign = alignment
+            };
+        }
+
+        private void LayoutBattleNetShell()
+        {
+            panelLoginAndPatch.Location = new Point(0, 0);
+            panelLoginAndPatch.Size = Size;
+            panelSettings.Location = new Point(0, 0);
+            panelSettings.Size = Size;
+
+            btnClose.Location = new Point(ClientSize.Width - 42, 8);
+            btnMinimize.Location = new Point(ClientSize.Width - 88, 8);
+            lBrandTitle.Visible = false;
+            lBrandSubtitle.Visible = false;
+
+            eLogin.Location = new Point(28, 444);
+            eLogin.Size = new Size(242, 30);
+            ePassword.Location = new Point(28, 492);
+            ePassword.Size = new Size(242, 30);
+            cbLoginList.Location = new Point(274, 444);
+            cbLoginList.Size = new Size(28, 30);
+            lLogin.Location = new Point(28, 422);
+            lLogin.Size = new Size(160, 20);
+            lPassword.Location = new Point(28, 470);
+            lPassword.Size = new Size(160, 20);
+
+            btnPlay.Location = new Point(28, 526);
+            btnPlay.Size = new Size(242, 52);
+            btnSettings.Location = new Point(900, 164);
+            btnSettings.Size = new Size(96, 32);
+            btnWebsite.Location = new Point(1004, 164);
+            btnWebsite.Size = new Size(96, 32);
+
+            lNewsFeed.Location = new Point(318, 206);
+            lNewsFeed.Size = new Size(540, 268);
+            imgBigNews.Location = new Point(318, 206);
+            imgBigNews.Size = new Size(540, 268);
+            lBigNewsImage.Location = new Point(318, 480);
+            lBigNewsImage.Size = new Size(540, 24);
+
+            pgbBackTotal.Location = new Point(318, 280);
+            pgbBackTotal.Size = new Size(678, 18);
+            pgbFrontTotal.Location = pgbBackTotal.Location;
+            pgbFrontTotal.Size = new Size(0, 18);
+            lPatchProgressBarText.Location = new Point(318, 244);
+            lPatchProgressBarText.Size = new Size(678, 28);
+            pPatchSteps.Location = new Point(318, 316);
+            pPatchSteps.Size = new Size(678, 170);
+
+            eServerIP.Location = new Point(318, 206);
+            eServerIP.Size = new Size(260, 30);
+            lIPAddress.Location = new Point(318, 184);
+            lIPAddress.Size = new Size(160, 20);
+            lPathToGameLabel.Location = new Point(318, 258);
+            lPathToGameLabel.Size = new Size(160, 20);
+            lGamePath.Location = new Point(318, 282);
+            lGamePath.Size = new Size(678, 38);
+            lDownloadLocationLabel.Location = new Point(318, 330);
+            lDownloadLocationLabel.Size = new Size(220, 20);
+            eDownloadLocation.Location = new Point(318, 354);
+            eDownloadLocation.Size = new Size(678, 30);
+            lDownloadClient.Location = new Point(318, 394);
+            lDownloadClient.Size = new Size(210, 28);
+            lGameClientType.Location = new Point(548, 394);
+            lGameClientType.Size = new Size(260, 28);
+            lSettingsBack.Location = new Point(786, 612);
+            lSettingsBack.Size = new Size(210, 38);
+
+            cbSaveUser.Location = new Point(318, 452);
+            lSaveUser.Location = new Point(348, 452);
+            cbUpdateLocale.Location = new Point(318, 486);
+            lUpdateLocale.Location = new Point(348, 486);
+            cbAllowUpdates.Location = new Point(318, 520);
+            lAllowUpdates.Location = new Point(348, 520);
+            cbSkipIntro.Location = new Point(570, 452);
+            lSkipIntro.Location = new Point(600, 452);
+            cbHideSplash.Location = new Point(570, 486);
+            lHideSplash.Location = new Point(600, 486);
+
+            foreach (var box in new[] { cbSaveUser, cbUpdateLocale, cbAllowUpdates, cbSkipIntro, cbHideSplash })
+                box.Size = new Size(22, 22);
+            foreach (var label in new[] { lSaveUser, lUpdateLocale, lAllowUpdates, lSkipIntro, lHideSplash })
+                label.Size = new Size(200, 24);
         }
 
         private void StyleTextBox(TextBox textBox)
@@ -633,6 +1006,16 @@ namespace AAEmu.Launcher
             label.BackColor = Color.Transparent;
             label.ForeColor = foreColor;
             label.Font = new Font("Segoe UI", size, style, GraphicsUnit.Point, 0);
+        }
+
+        private void StylePathValueLabel(Label label)
+        {
+            label.BackColor = Color.FromArgb(22, 27, 36);
+            label.BorderStyle = BorderStyle.FixedSingle;
+            label.ForeColor = ModernText;
+            label.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            label.Padding = new Padding(10, 0, 10, 0);
+            label.TextAlign = ContentAlignment.MiddleLeft;
         }
 
         // Gives the settings checkboxes a visible box outline, since a bare checkmark glyph is easy to miss
@@ -666,23 +1049,34 @@ namespace AAEmu.Launcher
             using (var backBrush = new LinearGradientBrush(ClientRectangle, Color.FromArgb(10, 13, 19), Color.FromArgb(23, 29, 39), 45F))
                 e.Graphics.FillRectangle(backBrush, ClientRectangle);
 
-            using (var accentBrush = new SolidBrush(Color.FromArgb(150, ModernAccent)))
-                e.Graphics.FillRectangle(accentBrush, new Rectangle(36, 95, 250, 3));
+            using (var leftBrush = new SolidBrush(Color.FromArgb(42, 20, 24, 33)))
+                e.Graphics.FillRectangle(leftBrush, new Rectangle(0, 122, 296, ClientSize.Height - 122));
+            using (var heroBrush = new LinearGradientBrush(new Rectangle(296, 122, 984, 520), Color.FromArgb(42, 49, 66), Color.FromArgb(19, 23, 32), 0F))
+                e.Graphics.FillRectangle(heroBrush, new Rectangle(296, 122, 984, 520));
+            using (var cardBrush = new SolidBrush(Color.FromArgb(220, 31, 35, 45)))
+                e.Graphics.FillRectangle(cardBrush, new Rectangle(880, 206, 340, 268));
+            using (var headerLine = new SolidBrush(Color.FromArgb(54, 139, 235)))
+                e.Graphics.FillRectangle(headerLine, new Rectangle(144, 119, 56, 3));
         }
 
         private void ModernPanel_Paint(object sender, PaintEventArgs e)
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using (var mainBrush = new SolidBrush(ModernPanel))
-                e.Graphics.FillRectangle(mainBrush, new Rectangle(16, 110, 640, 340));
-            using (var sideBrush = new SolidBrush(ModernPanelAlt))
-                e.Graphics.FillRectangle(sideBrush, new Rectangle(672, 78, 244, 374));
-            using (var lineBrush = new SolidBrush(Color.FromArgb(70, ModernAccent)))
-                e.Graphics.FillRectangle(lineBrush, new Rectangle(16, 110, 640, 2));
-            using (var borderPen = new Pen(Color.FromArgb(62, 72, 88)))
+            if (currentPanel == ShowPanelType.Settings)
             {
-                e.Graphics.DrawRectangle(borderPen, new Rectangle(16, 110, 640, 340));
-                e.Graphics.DrawRectangle(borderPen, new Rectangle(672, 78, 244, 374));
+                using (var mainBrush = new SolidBrush(ModernPanel))
+                    e.Graphics.FillRectangle(mainBrush, new Rectangle(296, 146, 732, 522));
+                using (var borderPen = new Pen(Color.FromArgb(62, 72, 88)))
+                    e.Graphics.DrawRectangle(borderPen, new Rectangle(296, 146, 732, 522));
+                return;
+            }
+
+            if (currentPanel == ShowPanelType.UpdatePatch)
+            {
+                using (var mainBrush = new SolidBrush(ModernPanel))
+                    e.Graphics.FillRectangle(mainBrush, new Rectangle(296, 184, 732, 322));
+                using (var borderPen = new Pen(Color.FromArgb(62, 72, 88)))
+                    e.Graphics.DrawRectangle(borderPen, new Rectangle(296, 184, 732, 322));
             }
         }
 
@@ -695,6 +1089,8 @@ namespace AAEmu.Launcher
                 buttonColor = Color.FromArgb(86, 117, 226);
             else if (isMouseOver)
                 buttonColor = ModernAccentHot;
+            if (!IsGameInstalled())
+                buttonColor = isMouseOver ? Color.FromArgb(73, 161, 255) : Color.FromArgb(54, 139, 235);
 
             StyleCommandLabel(btnPlay, buttonColor, Color.FromArgb(8, 12, 16), 24F);
             btnPlay.Image = null;
@@ -907,6 +1303,8 @@ namespace AAEmu.Launcher
             panelSettings.Visible = (panelID == ShowPanelType.Settings);
             panelSettings.Location = new Point(0, 0);
             panelSettings.Size = this.Size;
+            lDownloadLocationLabel.Visible = (panelID == ShowPanelType.Settings);
+            eDownloadLocation.Visible = (panelID == ShowPanelType.Settings);
             eServerIP.Enabled = (serverCheckStatus != serverCheck.Updating);
 
             if (serverCheckStatus == serverCheck.Updating)
@@ -920,7 +1318,7 @@ namespace AAEmu.Launcher
 
 
             // Gray out this setting if no update url is set
-            if ((Setting.ServerGameUpdateURL != null) && (Setting.ServerGameUpdateURL != ""))
+            if (!string.IsNullOrWhiteSpace(GetSelectedDownloadLocation()))
             {
                 lAllowUpdates.ForeColor = ModernText;
                 cbAllowUpdates.ForeColor = ModernAccent;
@@ -952,8 +1350,21 @@ namespace AAEmu.Launcher
                     break;
             }
 
-            lBrandTitle.BringToFront();
-            lBrandSubtitle.BringToFront();
+            var showHome = (panelID == ShowPanelType.Login);
+            foreach (var label in new[] { lHeroTitle, lHeroNewsTitle, lHeroNewsBody })
+            {
+                label.Visible = showHome;
+                label.BringToFront();
+            }
+
+            pGameHeader.BringToFront();
+            btnClose.BringToFront();
+            btnMinimize.BringToFront();
+            lInstallStatus.BringToFront();
+            lClientUpdateAction.BringToFront();
+            lClientUpdateAction.Visible = showHome;
+            lInstallStatus.Visible = showHome;
+            UpdateInstallStatus();
 
             currentPanel = panelID;
             Invalidate(true);
@@ -994,7 +1405,7 @@ namespace AAEmu.Launcher
             lLogin.Text = L.Username;
             lPassword.Text = L.Password;
             lIPAddress.Text = L.ServerAddress;
-            lPathToGameLabel.Text = L.PathToGame;
+            lPathToGameLabel.Text = SelectedGameDisplayName + " Path";
             lSaveUser.Text = L.SaveCredentials;
             lSkipIntro.Text = L.SkipIntro;
             lHideSplash.Text = L.HideSplashScreen;
@@ -1028,6 +1439,9 @@ namespace AAEmu.Launcher
             fixBin32StripMenuItem.Text = L.TSFixBin32;
 
             lDownloadLauncherUpdate.Text = string.Format(L.DownloadLauncherUpdate, LauncherUpdateVersion);
+            lDownloadClient.Text = "Install Game";
+            LoadSelectedGameFields();
+            UpdateInstallStatus();
 
             troubleshootGameToolStripMenuItem.Text = L.TroubleshootGame;
             troubleshootLauncherToolStripMenuItem.Text = L.TroubleshootLauncher;
@@ -1312,11 +1726,17 @@ namespace AAEmu.Launcher
                 Setting.PathToGame = "";
                 TryAutoFindGameExe();
             }
+            if (string.IsNullOrWhiteSpace(Setting.AAPath))
+                Setting.AAPath = Setting.PathToGame;
+            if (string.IsNullOrWhiteSpace(Setting.AADownloadLocation))
+                Setting.AADownloadLocation = string.IsNullOrWhiteSpace(Setting.ServerGameUpdateURL)
+                    ? LauncherFileSettings.DefaultAAClientDownloadLocation
+                    : Setting.ServerGameUpdateURL;
 
-            if ((Setting.PathToGame == "") || (!File.Exists(Setting.PathToGame)) || IsInDefaultLocation(Setting.PathToGame))
+            if ((GetAAPath() == "") || (!File.Exists(GetAAPath())) || IsInDefaultLocation(GetAAPath()))
             {
-                // open settings if no valid game file
-                ShowPanelControls(ShowPanelType.Settings);
+                // Show the main launcher with a primary install action when no valid client is configured.
+                ShowPanelControls(ShowPanelType.Login);
             }
             else
             {
@@ -1354,6 +1774,40 @@ namespace AAEmu.Launcher
             DoAutoLaunch = Setting.AutoLaunch;
 
             UpdatePanelLabels();
+        }
+
+        private bool IsGameInstalled()
+        {
+            var path = GetSelectedGamePath();
+            return !string.IsNullOrWhiteSpace(path) && File.Exists(path);
+        }
+
+        private void UpdateInstallStatus()
+        {
+            if (lInstallStatus == null || lClientUpdateAction == null)
+                return;
+
+            if (isClientDeltaUpdating)
+            {
+                lInstallStatus.Text = "Client update is running...";
+                lClientUpdateAction.Enabled = false;
+                lClientUpdateAction.ForeColor = ModernMutedText;
+                return;
+            }
+
+            if (IsGameInstalled())
+            {
+                lInstallStatus.Text = "Installed\n" + ClientDeltaUpdater.GetGameRoot(GetSelectedGamePath());
+                var downloadLocation = GetSelectedDownloadLocation();
+                lClientUpdateAction.Enabled = !string.IsNullOrWhiteSpace(downloadLocation) && !IsDefaultAAClientDownloadLocation(downloadLocation);
+                lClientUpdateAction.ForeColor = lClientUpdateAction.Enabled ? ModernText : ModernMutedText;
+            }
+            else
+            {
+                lInstallStatus.Text = "Not installed\nChoose a folder and the launcher will handle the rest.";
+                lClientUpdateAction.Enabled = false;
+                lClientUpdateAction.ForeColor = ModernMutedText;
+            }
         }
 
         private bool LoadClientLookup()
@@ -1424,7 +1878,6 @@ namespace AAEmu.Launcher
         private void UpdatePanelLabels()
         {
             lLoadedConfig.Text = Setting.ConfigName;
-            lGamePath.Text = Setting.PathToGame;
             eServerIP.Text = Setting.ServerIpAddress;
 
             cbLoginList.Items.Clear();
@@ -1443,6 +1896,8 @@ namespace AAEmu.Launcher
             SetCustomCheckBox(cbHideSplash, Setting.HideSplashLogo);
             SetCustomCheckBox(cbUpdateLocale, Setting.UpdateLocale);
             SetCustomCheckBox(cbAllowUpdates, Setting.AllowGameUpdates);
+            LoadSelectedGameFields();
+            UpdateInstallStatus();
         }
 
         private bool LoadSettingsFromStream(Stream aStream, string configFileName, string defaultHost = "127.0.0.1")
@@ -1487,7 +1942,14 @@ namespace AAEmu.Launcher
             eLogin.Text = Setting.LastLoginUser;
             ePassword.Text = Setting.LastLoginPass;
 
-            if (((Setting.ServerGameUpdateURL == null)) || (Setting.ServerGameUpdateURL == ""))
+            if (string.IsNullOrWhiteSpace(Setting.AAPath))
+                Setting.AAPath = Setting.PathToGame;
+            if (string.IsNullOrWhiteSpace(Setting.AADownloadLocation))
+                Setting.AADownloadLocation = string.IsNullOrWhiteSpace(Setting.ServerGameUpdateURL)
+                    ? LauncherFileSettings.DefaultAAClientDownloadLocation
+                    : Setting.ServerGameUpdateURL;
+
+            if (((GetAADownloadLocation() == null)) || (GetAADownloadLocation() == ""))
             {
                 Setting.AllowGameUpdates = false;
             }
@@ -1590,6 +2052,12 @@ namespace AAEmu.Launcher
 
         private void StartGame()
         {
+            if (selectedGameId == "jw")
+            {
+                StartSelectedExecutable();
+                return;
+            }
+
             if (Setting.PathToGame != "")
             {
                 if (eLogin.Text != "" && ePassword.Text != "")
@@ -1796,8 +2264,10 @@ namespace AAEmu.Launcher
 
         private void SaveSettings()
         {
+            SaveSelectedGameFields();
             Setting.ConfigVersion = 1;
-            Setting.PathToGame = lGamePath.Text;
+            Setting.PathToGame = Setting.AAPath;
+            Setting.ServerGameUpdateURL = Setting.AADownloadLocation;
             // Try saving lookups after we set the path
             SaveClientLookups();
 
@@ -1871,6 +2341,18 @@ namespace AAEmu.Launcher
 
         private void btnPlay_Click(object sender, EventArgs e)
         {
+            if (!IsGameInstalled())
+            {
+                lDownloadClient_Click(sender, e);
+                return;
+            }
+
+            if (selectedGameId == "jw")
+            {
+                StartSelectedExecutable();
+                return;
+            }
+
             switch (serverCheckStatus)
             {
                 case serverCheck.Update:
@@ -1961,6 +2443,13 @@ namespace AAEmu.Launcher
 
         private void GuessAndUpdateClientType()
         {
+            if (selectedGameId != "aa")
+            {
+                lGameClientType.Text = "JasonWoW";
+                lGameClientType.ForeColor = ModernAccent;
+                return;
+            }
+
             Application.UseWaitCursor = true;
             using (var puf = new InfoPopupForm())
             {
@@ -1969,7 +2458,7 @@ namespace AAEmu.Launcher
                 puf.Location = new Point(Location.X + ((Size.Width - puf.Size.Width) / 2), Location.Y + ((Size.Height - puf.Size.Height) / 2));
                 puf.Refresh();
                 var oldType = Setting.ClientLoginType;
-                Setting.ClientLoginType = AAAutoDetectClient.GuessLauncher(Setting.PathToGame);
+                Setting.ClientLoginType = AAAutoDetectClient.GuessLauncher(GetAAPath());
                 UpdateGameClientTypeLabel();
                 if (oldType != Setting.ClientLoginType)
                     lGameClientType.ForeColor = Color.FromArgb(250, 210, 90);
@@ -1984,15 +2473,18 @@ namespace AAEmu.Launcher
                 return;
             }
             OpenFileDialog openFileDialog = new OpenFileDialog();
-            if (lGamePath.Text != "")
+            var currentPath = GetSelectedGamePath();
+            if (currentPath != "")
             {
-                openFileDialog.InitialDirectory = Path.GetDirectoryName(lGamePath.Text);
+                openFileDialog.InitialDirectory = Path.GetDirectoryName(currentPath);
             }
             if (openFileDialog.InitialDirectory == "")
             {
                 openFileDialog.InitialDirectory = Path.Combine(DefaultGameWorkingDirectory,"bin32");
             }
-            openFileDialog.Filter = "ArcheAge|arche*.exe|ArcheAge Game|" + archeAgeEXE + "|ArcheWorld Game|" + archeWorldEXE + "| Executeable |*.exe|All files (*.*)|*.*";
+            openFileDialog.Filter = selectedGameId == "jw"
+                ? "World of Warcraft|Wow*.exe|Executable|*.exe|All files (*.*)|*.*"
+                : "ArcheAge|arche*.exe|ArcheAge Game|" + archeAgeEXE + "|ArcheWorld Game|" + archeWorldEXE + "| Executeable |*.exe|All files (*.*)|*.*";
             openFileDialog.FilterIndex = 1;
             openFileDialog.RestoreDirectory = true;
 
@@ -2007,8 +2499,8 @@ namespace AAEmu.Launcher
                         break;
                 }
                 //Get the path of specified file
-                Setting.PathToGame = openFileDialog.FileName;
-                lGamePath.Text = Setting.PathToGame;
+                SetSelectedGamePath(openFileDialog.FileName);
+                lGamePath.Text = GetSelectedGamePath();
                 GuessAndUpdateClientType();
                 break;
             }
@@ -2019,27 +2511,44 @@ namespace AAEmu.Launcher
             if (serverCheckStatus == serverCheck.Updating)
                 return;
 
+            SaveSelectedGameFields();
             using (var folderDialog = new FolderBrowserDialog())
             {
-                folderDialog.Description = "Choose a folder to install the ArcheAge client into";
+                folderDialog.Description = "Choose a folder to install " + SelectedGameDisplayName + " into";
                 if (!string.IsNullOrEmpty(DefaultGameWorkingDirectory))
                     folderDialog.SelectedPath = DefaultGameWorkingDirectory;
 
                 if (folderDialog.ShowDialog(this) != DialogResult.OK)
                     return;
 
+                var downloadLocation = GetSelectedDownloadLocation();
+                if (!IsDefaultAAClientDownloadLocation(downloadLocation) && !string.IsNullOrWhiteSpace(downloadLocation))
+                {
+                    InstallFromManifestLocation(folderDialog.SelectedPath, downloadLocation);
+                    return;
+                }
+
+                if (selectedGameId != "aa")
+                {
+                    MessageBox.Show(this, "Set a WoW Download Location URL before installing JasonWoW.", "Install", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
                 using (var dlg = new ClientDownloadForm(folderDialog.SelectedPath))
                 {
                     var result = dlg.ShowDialog(this);
                     if (result == DialogResult.OK && !string.IsNullOrEmpty(dlg.DetectedExePath))
                     {
-                        Setting.PathToGame = dlg.DetectedExePath;
-                        lGamePath.Text = Setting.PathToGame;
+                        SetSelectedGamePath(dlg.DetectedExePath);
+                        lGamePath.Text = GetSelectedGamePath();
                         // The client from this Google Drive package is always the same known AAEmu test client
                         // (r208022, ArcheAge 1.2 protocol) - the world.xml date heuristic in GuessLauncher() is
                         // unreliable for repacked test clients, so set it directly instead of guessing.
                         Setting.ClientLoginType = stringTrino_1_2;
                         UpdateGameClientTypeLabel();
+                        SaveSettings();
+                        UpdateInstallStatus();
+                        UpdatePlayButton(serverCheckStatus, false);
                         MessageBox.Show(this, "Game client downloaded and installed successfully.", "Download Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                     else if (result == DialogResult.Abort)
@@ -2047,6 +2556,159 @@ namespace AAEmu.Launcher
                         // Error already shown by ClientDownloadForm
                     }
                 }
+            }
+        }
+
+        private async void InstallFromManifestLocation(string destinationFolder, string downloadLocation)
+        {
+            try
+            {
+                isClientDeltaUpdating = true;
+                lClientUpdateAction.Text = "Installing...";
+                lInstallStatus.Text = "Installing " + SelectedGameDisplayName + "...";
+
+                var plan = await ClientDeltaUpdater.CheckForUpdatesInFolderAsync(downloadLocation, destinationFolder);
+                var progress = new Progress<ClientDeltaProgress>(p =>
+                {
+                    lInstallStatus.Text = $"Installing {p.CurrentFile}/{p.TotalFiles}\n{p.FileName}";
+                });
+                await ClientDeltaUpdater.ApplyUpdateToFolderAsync(downloadLocation, destinationFolder, plan, progress);
+
+                var exe = FindSelectedGameExecutable(destinationFolder);
+                if (string.IsNullOrWhiteSpace(exe))
+                    throw new FileNotFoundException("Install finished, but no game executable was found in the selected folder.");
+
+                SetSelectedGamePath(exe);
+                lGamePath.Text = GetSelectedGamePath();
+                SaveSettings();
+                UpdateInstallStatus();
+                UpdatePlayButton(serverCheckStatus, false);
+                MessageBox.Show(this, SelectedGameDisplayName + " installed successfully.", "Install Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Install Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                isClientDeltaUpdating = false;
+                lClientUpdateAction.Text = "Check Client Updates";
+                UpdateInstallStatus();
+            }
+        }
+
+        private string FindSelectedGameExecutable(string destinationFolder)
+        {
+            var names = selectedGameId == "jw"
+                ? new[] { "Wow.exe", "WowClassic.exe", "Wow-64.exe" }
+                : new[] { archeAgeEXE, archeWorldEXE };
+
+            foreach (var name in names)
+            {
+                try
+                {
+                    var match = Directory.EnumerateFiles(destinationFolder, name, SearchOption.AllDirectories).FirstOrDefault();
+                    if (match != null)
+                        return match;
+                }
+                catch
+                {
+                    // Ignore inaccessible folders.
+                }
+            }
+
+            try
+            {
+                return Directory.EnumerateFiles(destinationFolder, "*.exe", SearchOption.AllDirectories).FirstOrDefault();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private void StartSelectedExecutable()
+        {
+            var exePath = GetSelectedGamePath();
+            if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
+            {
+                MessageBox.Show(SelectedGameDisplayName + " path is not set.");
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(exePath)
+                {
+                    WorkingDirectory = Path.GetDirectoryName(exePath),
+                    UseShellExecute = true
+                });
+                WindowState = FormWindowState.Minimized;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Launch Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private async void LClientUpdateAction_Click(object sender, EventArgs e)
+        {
+            if (isClientDeltaUpdating || !lClientUpdateAction.Enabled)
+                return;
+
+            if (!IsGameInstalled())
+            {
+                lDownloadClient_Click(sender, e);
+                return;
+            }
+
+            var downloadLocation = GetSelectedDownloadLocation();
+            var gamePath = GetSelectedGamePath();
+            if (string.IsNullOrWhiteSpace(downloadLocation))
+            {
+                MessageBox.Show(this, "No " + SelectedGameDisplayName + " Download Location URL is configured.", "Client Updates", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                isClientDeltaUpdating = true;
+                lClientUpdateAction.Text = "Checking...";
+                UpdateInstallStatus();
+
+                var plan = await ClientDeltaUpdater.CheckForUpdatesAsync(downloadLocation, gamePath);
+                if (plan.ChangedFiles.Count == 0 && plan.RemovedFiles.Count == 0)
+                {
+                    MessageBox.Show(this, "The installed client already matches the latest client manifest.", "Client Updates", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var sizeMb = Math.Max(1, plan.DownloadSize / 1024 / 1024);
+                var confirm = MessageBox.Show(this,
+                    $"Client update {plan.Manifest.Version} is available.\n\nDownload {plan.ChangedFiles.Count} changed file(s), about {sizeMb} MB?",
+                    "Client Updates", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (confirm != DialogResult.Yes)
+                    return;
+
+                lClientUpdateAction.Text = "Updating...";
+                var progress = new Progress<ClientDeltaProgress>(p =>
+                {
+                    lInstallStatus.Text = $"Updating {p.CurrentFile}/{p.TotalFiles}\n{p.FileName}";
+                });
+
+                await ClientDeltaUpdater.ApplyUpdateAsync(downloadLocation, gamePath, plan, progress);
+                MessageBox.Show(this, "Client files updated successfully.", "Client Updates", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Client Update Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                isClientDeltaUpdating = false;
+                lClientUpdateAction.Text = "Check Client Updates";
+                UpdateInstallStatus();
+                UpdatePlayButton(serverCheckStatus, false);
             }
         }
 
@@ -2335,7 +2997,8 @@ namespace AAEmu.Launcher
                 if (exeFile != "")
                 {
                     Setting.PathToGame = exeFile;
-                    lGamePath.Text = Setting.PathToGame;
+                    Setting.AAPath = exeFile;
+                    lGamePath.Text = GetSelectedGamePath();
                     Application.UseWaitCursor = false;
                     return;
                 }
@@ -2368,7 +3031,8 @@ namespace AAEmu.Launcher
                 if ((exeFile != "") && (File.Exists(exeFile)))
                 {
                     Setting.PathToGame = exeFile;
-                    lGamePath.Text = Setting.PathToGame;
+                    Setting.AAPath = exeFile;
+                    lGamePath.Text = GetSelectedGamePath();
                 }
             }
             catch
@@ -2381,6 +3045,13 @@ namespace AAEmu.Launcher
 
         private void UpdatePlayButton(serverCheck serverState, bool isMouseOver)
         {
+            if (!IsGameInstalled())
+            {
+                btnPlay.Text = "Install";
+                btnPlay.Cursor = Cursors.Hand;
+                ApplyModernPlayButton(serverState, isMouseOver);
+                return;
+            }
 
             if (isMouseOver == true)
             {
