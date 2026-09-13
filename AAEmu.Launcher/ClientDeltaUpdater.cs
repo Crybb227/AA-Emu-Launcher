@@ -37,9 +37,16 @@ namespace AAEmu.Launcher
     public class ClientDeltaUpdatePlan
     {
         public ClientUpdateManifest Manifest { get; set; }
+        public string ResolvedUpdateBaseUrl { get; set; }
         public List<ClientUpdateManifestEntry> ChangedFiles { get; set; } = new List<ClientUpdateManifestEntry>();
         public List<string> RemovedFiles { get; set; } = new List<string>();
         public long DownloadSize => ChangedFiles.Sum(f => f.Size);
+    }
+
+    public class GitHubRepositoryInfo
+    {
+        [JsonProperty("default_branch")]
+        public string DefaultBranch { get; set; }
     }
 
     public class ClientDeltaProgress
@@ -54,6 +61,7 @@ namespace AAEmu.Launcher
     /// <summary>
     /// Static-file client updater. Host a manifest at {updateUrl}/client/manifest.json and
     /// changed files at {updateUrl}/client/files/{relative_path_with_slashes_replaced_by_underscores}.
+    /// GitHub repository and tree URLs are resolved to raw.githubusercontent.com.
     /// </summary>
     public static class ClientDeltaUpdater
     {
@@ -83,7 +91,8 @@ namespace AAEmu.Launcher
                 throw new InvalidOperationException("Choose an install folder before checking for client updates.");
 
             Directory.CreateDirectory(gameRoot);
-            var remoteManifest = await DownloadManifestAsync(updateBaseUrl, cancellationToken);
+            var resolvedUpdateBaseUrl = await ResolveUpdateBaseUrlAsync(updateBaseUrl, cancellationToken);
+            var remoteManifest = await DownloadManifestAsync(resolvedUpdateBaseUrl, cancellationToken);
             var localManifest = TryReadLocalManifest(gameRoot);
 
             var changedFiles = GetChangedFiles(gameRoot, remoteManifest);
@@ -92,6 +101,7 @@ namespace AAEmu.Launcher
             return new ClientDeltaUpdatePlan
             {
                 Manifest = remoteManifest,
+                ResolvedUpdateBaseUrl = resolvedUpdateBaseUrl,
                 ChangedFiles = changedFiles,
                 RemovedFiles = removedFiles,
             };
@@ -123,7 +133,7 @@ namespace AAEmu.Launcher
                     if (!string.IsNullOrEmpty(destinationFolder))
                         Directory.CreateDirectory(destinationFolder);
 
-                    var downloadUrl = GetEntryDownloadUrl(updateBaseUrl, entry);
+                    var downloadUrl = GetEntryDownloadUrl(plan.ResolvedUpdateBaseUrl ?? updateBaseUrl, entry);
                     using (var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
                     {
                         response.EnsureSuccessStatusCode();
@@ -249,6 +259,82 @@ namespace AAEmu.Launcher
                 return entry.Url;
 
             return CombineUrl(updateBaseUrl, "client/files/" + Uri.EscapeDataString(FlattenAssetName(entry.Path)));
+        }
+
+        private static async Task<string> ResolveUpdateBaseUrlAsync(string updateBaseUrl, CancellationToken cancellationToken)
+        {
+            if (!TryGetGitHubRawBaseUrl(updateBaseUrl, out var rawBaseUrl, out var ownerRepo, out var needsDefaultBranch))
+                return updateBaseUrl;
+
+            if (!needsDefaultBranch)
+                return rawBaseUrl;
+
+            var defaultBranch = await GetGitHubDefaultBranchAsync(ownerRepo, cancellationToken);
+            if (string.IsNullOrWhiteSpace(defaultBranch))
+                defaultBranch = "main";
+
+            return rawBaseUrl.Replace("{branch}", Uri.EscapeDataString(defaultBranch));
+        }
+
+        private static bool TryGetGitHubRawBaseUrl(string updateBaseUrl, out string rawBaseUrl, out string ownerRepo, out bool needsDefaultBranch)
+        {
+            rawBaseUrl = null;
+            ownerRepo = null;
+            needsDefaultBranch = false;
+
+            if (!Uri.TryCreate(updateBaseUrl, UriKind.Absolute, out var uri) ||
+                !string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var parts = uri.AbsolutePath.Trim('/').Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2)
+                return false;
+
+            var owner = parts[0];
+            var repo = parts[1].EndsWith(".git", StringComparison.OrdinalIgnoreCase)
+                ? parts[1].Substring(0, parts[1].Length - 4)
+                : parts[1];
+            ownerRepo = owner + "/" + repo;
+
+            var branch = "{branch}";
+            var basePath = "";
+            needsDefaultBranch = true;
+
+            if (parts.Length >= 4 &&
+                (string.Equals(parts[2], "tree", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(parts[2], "blob", StringComparison.OrdinalIgnoreCase)))
+            {
+                branch = parts[3];
+                basePath = parts.Length > 4 ? string.Join("/", parts.Skip(4)) : "";
+                needsDefaultBranch = false;
+            }
+
+            rawBaseUrl = "https://raw.githubusercontent.com/" + ownerRepo + "/" + branch;
+            if (!string.IsNullOrWhiteSpace(basePath))
+                rawBaseUrl += "/" + basePath.Trim('/');
+
+            return true;
+        }
+
+        private static async Task<string> GetGitHubDefaultBranchAsync(string ownerRepo, CancellationToken cancellationToken)
+        {
+            try
+            {
+                using (var client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd("AAEmu.Launcher");
+                    client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+                    var json = await client.GetStringAsync("https://api.github.com/repos/" + ownerRepo);
+                    var repoInfo = JsonConvert.DeserializeObject<GitHubRepositoryInfo>(json);
+                    return repoInfo?.DefaultBranch;
+                }
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static string CombineUrl(string baseUrl, string relativePath)

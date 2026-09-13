@@ -1,6 +1,6 @@
 name: Build and Release Launcher
 
-# Publishes a friend-friendly portable ZIP.
+# Publishes a friend-friendly portable ZIP plus per-file updater assets.
 # Friends should download AAEmu-Launcher-vX.X.X.X.zip, extract it, and run
 # "Start Launcher.bat".
 
@@ -89,6 +89,25 @@ jobs:
           - If Windows SmartScreen appears, choose More info, then Run anyway if you trust this release.
           "@ | Set-Content -Path (Join-Path $packageDir "README-FIRST.txt") -Encoding UTF8
 
+          $manifestFiles = @()
+          Get-ChildItem -Path $packageDir -File -Recurse | ForEach-Object {
+            $relativePath = [System.IO.Path]::GetRelativePath($packageDir, $_.FullName).Replace("\", "/")
+            $assetName = $relativePath.Replace("/", "_")
+            $assetPath = Join-Path $stagingDir $assetName
+
+            Copy-Item -LiteralPath $_.FullName -Destination $assetPath -Force
+            $manifestFiles += [PSCustomObject]@{
+              path   = $relativePath
+              sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+              size   = $_.Length
+            }
+          }
+
+          [PSCustomObject]@{
+            version = "${{ steps.version.outputs.version }}"
+            files   = $manifestFiles
+          } | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $stagingDir "manifest.json") -Encoding UTF8
+
           Compress-Archive -Path (Join-Path $packageDir "*") -DestinationPath (Join-Path $stagingDir $zipName) -Force
 
       - name: Create GitHub Release
@@ -99,5 +118,7 @@ jobs:
             ## Download
 
             Download **AAEmu-Launcher-v${{ steps.version.outputs.version }}.zip**, extract it, then run **Start Launcher.bat**.
-          files: release-assets/*.zip
+
+            Existing launcher installs can update in-app from this release.
+          files: release-assets/*
           generate_release_notes: true

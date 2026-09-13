@@ -43,7 +43,10 @@ namespace AAEmu.Launcher
 
         public partial class LauncherFileSettings
         {
-            public const string DefaultAAClientDownloadLocation = "https://drive.google.com/drive/folders/1_pIBVHIm1YFal-nteGaVuXjTv3Yrsv4Q";
+            public const string DefaultLauncherUpdateRepo = "Crybb227/AA-Emu-Launcher";
+            public const string DefaultAAClientDownloadLocation = "https://github.com/Crybb227/AA-Emu-Client-AA";
+            public const string DefaultWoWClientDownloadLocation = "https://github.com/Crybb227/AA-Emu-Client-WoW";
+            public const string LegacyAAClientGoogleDriveLocation = "https://drive.google.com/drive/folders/1_pIBVHIm1YFal-nteGaVuXjTv3Yrsv4Q";
 
             [JsonProperty("configVersion", NullValueHandling = NullValueHandling.Ignore)]
             public int ConfigVersion { get; set; } = 0;
@@ -70,7 +73,7 @@ namespace AAEmu.Launcher
             public string WoWPath { get; set; } = string.Empty;
 
             [JsonProperty("wowDownloadLocation", NullValueHandling = NullValueHandling.Ignore)]
-            public string WoWDownloadLocation { get; set; } = string.Empty;
+            public string WoWDownloadLocation { get; set; } = DefaultWoWClientDownloadLocation;
 
             [JsonProperty("serverIPAddress", NullValueHandling = NullValueHandling.Ignore)]
             public string ServerIpAddress { get; set; } = "127.0.0.1";
@@ -138,7 +141,7 @@ namespace AAEmu.Launcher
                 setting.AAPath = "";
                 setting.AADownloadLocation = DefaultAAClientDownloadLocation;
                 setting.WoWPath = "";
-                setting.WoWDownloadLocation = "";
+                setting.WoWDownloadLocation = DefaultWoWClientDownloadLocation;
                 setting.ServerIpAddress = "127.0.0.1";
                 setting.SaveLoginAndPassword = false;
                 setting.SkipIntro = false;
@@ -466,7 +469,7 @@ namespace AAEmu.Launcher
         string urlLauncherUpdateDownload = "";
         string LauncherUpdateVersion = "";
         bool checkedForLauncherUpdates = false;
-        public const string launcherUpdateRepo = "Crybb227/AA-Emu-Launcher";
+        public const string launcherUpdateRepo = LauncherFileSettings.DefaultLauncherUpdateRepo;
         LauncherUpdateInfo pendingLauncherUpdate = null;
         public string DefaultGameWorkingDirectory = "";
 
@@ -526,6 +529,8 @@ namespace AAEmu.Launcher
         private Label lHeroTitle;
         private Label lHeroNewsTitle;
         private Label lHeroNewsBody;
+        private bool isCloseButtonHot = false;
+        private bool isMinimizeButtonHot = false;
         private string selectedGameId = "aa";
         private bool isClientDeltaUpdating = false;
 
@@ -538,7 +543,7 @@ namespace AAEmu.Launcher
 
         private void ApplyModernTheme()
         {
-            Text = "Jason AA Launcher";
+            Text = "Jason Games Launcher";
             ClientSize = new Size(1280, 720);
             CenterToScreen();
             BackColor = ModernBack;
@@ -562,7 +567,7 @@ namespace AAEmu.Launcher
                 ForeColor = ModernText,
                 Location = new Point(36, 22),
                 Size = new Size(520, 48),
-                Text = "Jason AA Launcher"
+                Text = "Jason Games Launcher"
             };
 
             lBrandSubtitle = new Label
@@ -622,6 +627,8 @@ namespace AAEmu.Launcher
             btnPlay.Image = null;
             btnSettings.Image = null;
             btnWebsite.Image = null;
+            ConfigureWindowButton(btnMinimize);
+            ConfigureWindowButton(btnClose);
             StyleCommandLabel(btnSettings, Color.FromArgb(45, 52, 66), ModernText, 9F);
             StyleCommandLabel(btnWebsite, Color.FromArgb(45, 52, 66), ModernText, 9F);
             StyleCommandLabel(lSettingsBack, Color.FromArgb(45, 52, 66), ModernText, 11F);
@@ -677,10 +684,12 @@ namespace AAEmu.Launcher
             pGameHeader.MouseMove += LauncherForm_MouseMove;
             pGameHeader.MouseUp += LauncherForm_MouseUp;
 
-            var lLogo = CreateHeaderTab("AA", new Point(22, 18), false);
-            lLogo.Font = new Font("Segoe UI Semibold", 18F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            var lLogo = CreateHeaderTab("Jason Games Launcher", new Point(28, 18), false);
+            lLogo.Cursor = Cursors.Default;
+            lLogo.Font = new Font("Segoe UI Semibold", 15F, FontStyle.Bold, GraphicsUnit.Point, 0);
             lLogo.ForeColor = Color.FromArgb(72, 155, 255);
-            lLogo.Size = new Size(54, 40);
+            lLogo.Size = new Size(270, 40);
+            lLogo.TextAlign = ContentAlignment.MiddleLeft;
             lGameArcheAge = CreateGameIcon("AA", new Point(144, 64), true);
             lGameArcheAge.Click += (s, e) => SelectLauncherGame("aa");
             lGameJasonWoW = CreateGameIcon("JW", new Point(210, 64), false);
@@ -782,7 +791,7 @@ namespace AAEmu.Launcher
 
         private string GetSelectedDownloadLocation()
         {
-            return selectedGameId == "jw" ? Setting.WoWDownloadLocation : GetAADownloadLocation();
+            return selectedGameId == "jw" ? GetWoWDownloadLocation() : GetAADownloadLocation();
         }
 
         private string GetAAPath()
@@ -799,11 +808,18 @@ namespace AAEmu.Launcher
             return LauncherFileSettings.DefaultAAClientDownloadLocation;
         }
 
-        private bool IsDefaultAAClientDownloadLocation(string downloadLocation)
+        private string GetWoWDownloadLocation()
+        {
+            if (!string.IsNullOrWhiteSpace(Setting.WoWDownloadLocation))
+                return Setting.WoWDownloadLocation;
+            return LauncherFileSettings.DefaultWoWClientDownloadLocation;
+        }
+
+        private bool IsLegacyAAClientGoogleDriveLocation(string downloadLocation)
         {
             return selectedGameId == "aa" &&
-                (string.IsNullOrWhiteSpace(downloadLocation) ||
-                 string.Equals(downloadLocation.TrimEnd('/'), LauncherFileSettings.DefaultAAClientDownloadLocation, StringComparison.OrdinalIgnoreCase));
+                !string.IsNullOrWhiteSpace(downloadLocation) &&
+                string.Equals(downloadLocation.TrimEnd('/'), LauncherFileSettings.LegacyAAClientGoogleDriveLocation, StringComparison.OrdinalIgnoreCase);
         }
 
         private void SetSelectedGamePath(string path)
@@ -918,34 +934,47 @@ namespace AAEmu.Launcher
             panelSettings.Location = new Point(0, 0);
             panelSettings.Size = Size;
 
-            btnClose.Location = new Point(ClientSize.Width - 42, 8);
-            btnMinimize.Location = new Point(ClientSize.Width - 88, 8);
+            btnClose.Location = new Point(ClientSize.Width - 46, 0);
+            btnClose.Size = new Size(46, 32);
+            btnMinimize.Location = new Point(ClientSize.Width - 92, 0);
+            btnMinimize.Size = new Size(46, 32);
             lBrandTitle.Visible = false;
             lBrandSubtitle.Visible = false;
 
-            eLogin.Location = new Point(28, 444);
+            eLogin.Location = new Point(28, 320);
             eLogin.Size = new Size(242, 30);
-            ePassword.Location = new Point(28, 492);
+            ePassword.Location = new Point(28, 370);
             ePassword.Size = new Size(242, 30);
-            cbLoginList.Location = new Point(274, 444);
+            cbLoginList.Location = new Point(274, 320);
             cbLoginList.Size = new Size(28, 30);
-            lLogin.Location = new Point(28, 422);
+            lLogin.Location = new Point(28, 298);
             lLogin.Size = new Size(160, 20);
-            lPassword.Location = new Point(28, 470);
+            lPassword.Location = new Point(28, 348);
             lPassword.Size = new Size(160, 20);
 
-            btnPlay.Location = new Point(28, 526);
-            btnPlay.Size = new Size(242, 52);
-            btnSettings.Location = new Point(900, 164);
+            btnPlay.Location = new Point(28, 414);
+            btnPlay.Size = new Size(242, 46);
+            lClientUpdateAction.Location = new Point(28, 474);
+            lClientUpdateAction.Size = new Size(242, 32);
+            lInstallStatus.Location = new Point(28, 518);
+            lInstallStatus.Size = new Size(242, 62);
+            lHeroTitle.Location = new Point(28, 178);
+            lHeroTitle.Size = new Size(242, 72);
+            lHeroTitle.Font = new Font("Segoe UI Semibold", 20F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            btnSettings.Location = new Point(900, 154);
             btnSettings.Size = new Size(96, 32);
-            btnWebsite.Location = new Point(1004, 164);
+            btnWebsite.Location = new Point(1004, 154);
             btnWebsite.Size = new Size(96, 32);
+            lHeroNewsTitle.Location = new Point(900, 204);
+            lHeroNewsTitle.Size = new Size(300, 32);
+            lHeroNewsBody.Location = new Point(900, 236);
+            lHeroNewsBody.Size = new Size(300, 152);
 
-            lNewsFeed.Location = new Point(318, 206);
-            lNewsFeed.Size = new Size(540, 268);
-            imgBigNews.Location = new Point(318, 206);
-            imgBigNews.Size = new Size(540, 268);
-            lBigNewsImage.Location = new Point(318, 480);
+            lNewsFeed.Location = new Point(318, 190);
+            lNewsFeed.Size = new Size(540, 286);
+            imgBigNews.Location = new Point(318, 190);
+            imgBigNews.Size = new Size(540, 286);
+            lBigNewsImage.Location = new Point(318, 482);
             lBigNewsImage.Size = new Size(540, 24);
 
             pgbBackTotal.Location = new Point(318, 280);
@@ -1037,6 +1066,49 @@ namespace AAEmu.Launcher
             label.TextAlign = ContentAlignment.MiddleCenter;
         }
 
+        private void ConfigureWindowButton(PictureBox button)
+        {
+            button.Image = null;
+            button.BackColor = Color.Transparent;
+            button.SizeMode = PictureBoxSizeMode.Normal;
+            button.Paint -= WindowButton_Paint;
+            button.Paint += WindowButton_Paint;
+            button.Invalidate();
+        }
+
+        private void WindowButton_Paint(object sender, PaintEventArgs e)
+        {
+            var button = sender as PictureBox;
+            if (button == null)
+                return;
+
+            var isClose = button == btnClose;
+            var isHot = isClose ? isCloseButtonHot : isMinimizeButtonHot;
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            if (isHot)
+            {
+                var hoverColor = isClose ? Color.FromArgb(196, 43, 43) : Color.FromArgb(40, 46, 58);
+                using (var brush = new SolidBrush(hoverColor))
+                    e.Graphics.FillRectangle(brush, button.ClientRectangle);
+            }
+
+            using (var pen = new Pen(isHot || !isClose ? ModernText : Color.FromArgb(185, 194, 205), 1.6F))
+            {
+                pen.StartCap = LineCap.Round;
+                pen.EndCap = LineCap.Round;
+                if (isClose)
+                {
+                    e.Graphics.DrawLine(pen, 18, 11, 28, 21);
+                    e.Graphics.DrawLine(pen, 28, 11, 18, 21);
+                }
+                else
+                {
+                    e.Graphics.DrawLine(pen, 17, 17, 29, 17);
+                }
+            }
+        }
+
         private void StyleContextMenu(ContextMenuStrip menu)
         {
             menu.BackColor = Color.FromArgb(28, 33, 43);
@@ -1051,10 +1123,10 @@ namespace AAEmu.Launcher
 
             using (var leftBrush = new SolidBrush(Color.FromArgb(42, 20, 24, 33)))
                 e.Graphics.FillRectangle(leftBrush, new Rectangle(0, 122, 296, ClientSize.Height - 122));
-            using (var heroBrush = new LinearGradientBrush(new Rectangle(296, 122, 984, 520), Color.FromArgb(42, 49, 66), Color.FromArgb(19, 23, 32), 0F))
-                e.Graphics.FillRectangle(heroBrush, new Rectangle(296, 122, 984, 520));
+            using (var heroBrush = new LinearGradientBrush(new Rectangle(296, 122, 984, 410), Color.FromArgb(42, 49, 66), Color.FromArgb(19, 23, 32), 0F))
+                e.Graphics.FillRectangle(heroBrush, new Rectangle(296, 122, 984, 410));
             using (var cardBrush = new SolidBrush(Color.FromArgb(220, 31, 35, 45)))
-                e.Graphics.FillRectangle(cardBrush, new Rectangle(880, 206, 340, 268));
+                e.Graphics.FillRectangle(cardBrush, new Rectangle(880, 190, 340, 286));
             using (var headerLine = new SolidBrush(Color.FromArgb(54, 139, 235)))
                 e.Graphics.FillRectangle(headerLine, new Rectangle(144, 119, 56, 3));
         }
@@ -1592,9 +1664,7 @@ namespace AAEmu.Launcher
             // Load default language
             InitDefaultLanguage();
 
-            // Helps to keep the editing window cleaner
-            imgBigNews.SizeMode = PictureBoxSizeMode.Normal;
-            imgBigNews.Size = imgBigNews.Image.Size;
+            imgBigNews.SizeMode = PictureBoxSizeMode.Zoom;
             imgBigNews.Invalidate();
 
             AppOpenMode = LauncherOpenMode.DefaultConfigFile;
@@ -1732,6 +1802,8 @@ namespace AAEmu.Launcher
                 Setting.AADownloadLocation = string.IsNullOrWhiteSpace(Setting.ServerGameUpdateURL)
                     ? LauncherFileSettings.DefaultAAClientDownloadLocation
                     : Setting.ServerGameUpdateURL;
+            if (string.IsNullOrWhiteSpace(Setting.WoWDownloadLocation))
+                Setting.WoWDownloadLocation = LauncherFileSettings.DefaultWoWClientDownloadLocation;
 
             if ((GetAAPath() == "") || (!File.Exists(GetAAPath())) || IsInDefaultLocation(GetAAPath()))
             {
@@ -1792,6 +1864,7 @@ namespace AAEmu.Launcher
                 lInstallStatus.Text = "Client update is running...";
                 lClientUpdateAction.Enabled = false;
                 lClientUpdateAction.ForeColor = ModernMutedText;
+                lClientUpdateAction.Cursor = Cursors.WaitCursor;
                 return;
             }
 
@@ -1799,14 +1872,17 @@ namespace AAEmu.Launcher
             {
                 lInstallStatus.Text = "Installed\n" + ClientDeltaUpdater.GetGameRoot(GetSelectedGamePath());
                 var downloadLocation = GetSelectedDownloadLocation();
-                lClientUpdateAction.Enabled = !string.IsNullOrWhiteSpace(downloadLocation) && !IsDefaultAAClientDownloadLocation(downloadLocation);
-                lClientUpdateAction.ForeColor = lClientUpdateAction.Enabled ? ModernText : ModernMutedText;
+                var canCheckUpdates = !string.IsNullOrWhiteSpace(downloadLocation) && !IsLegacyAAClientGoogleDriveLocation(downloadLocation);
+                lClientUpdateAction.Enabled = true;
+                lClientUpdateAction.Cursor = Cursors.Hand;
+                lClientUpdateAction.ForeColor = canCheckUpdates ? ModernText : ModernMutedText;
             }
             else
             {
                 lInstallStatus.Text = "Not installed\nChoose a folder and the launcher will handle the rest.";
                 lClientUpdateAction.Enabled = false;
                 lClientUpdateAction.ForeColor = ModernMutedText;
+                lClientUpdateAction.Cursor = Cursors.No;
             }
         }
 
@@ -1948,6 +2024,8 @@ namespace AAEmu.Launcher
                 Setting.AADownloadLocation = string.IsNullOrWhiteSpace(Setting.ServerGameUpdateURL)
                     ? LauncherFileSettings.DefaultAAClientDownloadLocation
                     : Setting.ServerGameUpdateURL;
+            if (string.IsNullOrWhiteSpace(Setting.WoWDownloadLocation))
+                Setting.WoWDownloadLocation = LauncherFileSettings.DefaultWoWClientDownloadLocation;
 
             if (((GetAADownloadLocation() == null)) || (GetAADownloadLocation() == ""))
             {
@@ -2522,7 +2600,7 @@ namespace AAEmu.Launcher
                     return;
 
                 var downloadLocation = GetSelectedDownloadLocation();
-                if (!IsDefaultAAClientDownloadLocation(downloadLocation) && !string.IsNullOrWhiteSpace(downloadLocation))
+                if (!IsLegacyAAClientGoogleDriveLocation(downloadLocation) && !string.IsNullOrWhiteSpace(downloadLocation))
                 {
                     InstallFromManifestLocation(folderDialog.SelectedPath, downloadLocation);
                     return;
@@ -2653,7 +2731,7 @@ namespace AAEmu.Launcher
 
         private async void LClientUpdateAction_Click(object sender, EventArgs e)
         {
-            if (isClientDeltaUpdating || !lClientUpdateAction.Enabled)
+            if (isClientDeltaUpdating)
                 return;
 
             if (!IsGameInstalled())
@@ -2667,6 +2745,13 @@ namespace AAEmu.Launcher
             if (string.IsNullOrWhiteSpace(downloadLocation))
             {
                 MessageBox.Show(this, "No " + SelectedGameDisplayName + " Download Location URL is configured.", "Client Updates", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (IsLegacyAAClientGoogleDriveLocation(downloadLocation))
+            {
+                MessageBox.Show(this,
+                    "Client update checks need a manifest-based Download Location URL, such as a web folder or GitHub tree containing client/manifest.json. The legacy Google Drive package can install the client, but it does not provide update manifests.",
+                    "Client Updates", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -4825,12 +4910,14 @@ namespace AAEmu.Launcher
 
         private void btnClose_MouseEnter(object sender, EventArgs e)
         {
-            btnClose.Image = Properties.Resources.btn_exit_active;
+            isCloseButtonHot = true;
+            btnClose.Invalidate();
         }
 
         private void btnClose_MouseLeave(object sender, EventArgs e)
         {
-            btnClose.Image = Properties.Resources.btn_exit;
+            isCloseButtonHot = false;
+            btnClose.Invalidate();
         }
 
         private void btnMinimize_Click(object sender, EventArgs e)
@@ -4840,12 +4927,14 @@ namespace AAEmu.Launcher
 
         private void btnMinimize_MouseEnter(object sender, EventArgs e)
         {
-            btnMinimize.Image = Properties.Resources.btn_minimize_active;
+            isMinimizeButtonHot = true;
+            btnMinimize.Invalidate();
         }
 
         private void btnMinimize_MouseLeave(object sender, EventArgs e)
         {
-            btnMinimize.Image = Properties.Resources.btn_minimize;
+            isMinimizeButtonHot = false;
+            btnMinimize.Invalidate();
         }
 
         private void btnSystem_MouseEnter(object sender, EventArgs e)
