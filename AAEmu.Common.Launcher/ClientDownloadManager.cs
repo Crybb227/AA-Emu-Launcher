@@ -28,6 +28,7 @@ namespace AAEmu.Launcher.Basic
         public int TotalFiles;
         public long BytesDownloaded;
         public long BytesTotal;
+        public string Message;
     }
 
     /// <summary>
@@ -48,6 +49,8 @@ namespace AAEmu.Launcher.Basic
         };
 
         private const string MainArchiveFileName = "aaemu client.zip";
+        private const string MegaCmdDownloadUrl = "https://mega.io/cmd";
+        public const string AA35ArchiveFileName = "AA 3.5.0.3 - Trion - r342464 - 2017-06-08.7z";
 
         public static async Task DownloadAllPartsAsync(string downloadFolder, IProgress<ClientDownloadProgress> progress, CancellationToken cancellationToken = default)
         {
@@ -119,6 +122,173 @@ namespace AAEmu.Launcher.Basic
             return null;
         }
 
+        public static string FindMegaGetExecutable()
+        {
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var candidates = new List<string>
+            {
+                Path.Combine(localAppData, "MEGAcmd", "mega-get.bat"),
+                Path.Combine(localAppData, "MEGAcmd", "mega-get.exe"),
+                Path.Combine(localAppData, "MEGAcmd", "mega-get"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "MEGAcmd", "mega-get.bat"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "MEGAcmd", "mega-get.bat"),
+            };
+
+            foreach (var candidate in candidates)
+            {
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+
+            try
+            {
+                foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator))
+                {
+                    if (string.IsNullOrWhiteSpace(dir))
+                        continue;
+
+                    foreach (var name in new[] { "mega-get.bat", "mega-get.exe", "mega-get" })
+                    {
+                        var candidate = Path.Combine(dir.Trim(), name);
+                        if (File.Exists(candidate))
+                            return candidate;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore malformed PATH entries
+            }
+
+            return null;
+        }
+
+        public static string MegaCmdDownloadPage => MegaCmdDownloadUrl;
+
+        public static async Task DownloadMegaLinkAsync(string megaLink, string downloadFolder, string expectedFileName, IProgress<ClientDownloadProgress> progress, CancellationToken cancellationToken = default)
+        {
+            var megaGet = FindMegaGetExecutable();
+            if (megaGet == null)
+                throw new FileNotFoundException("MEGAcmd was not found. Install MEGAcmd from " + MegaCmdDownloadUrl + " and try again.");
+
+            Directory.CreateDirectory(downloadFolder);
+            DeleteUnexpectedMegaDownloads(downloadFolder, expectedFileName);
+            var startedAt = DateTime.UtcNow;
+            progress?.Report(new ClientDownloadProgress
+            {
+                Stage = "MegaDownloading",
+                CurrentFile = "MEGA download",
+                Message = "Downloading " + expectedFileName + " from MEGA with MEGAcmd..."
+            });
+
+            using (var heartbeat = new Timer(_ =>
+            {
+                var elapsed = DateTime.UtcNow - startedAt;
+                var downloadedBytes = GetExpectedDownloadSize(downloadFolder, expectedFileName);
+                var sizeMessage = downloadedBytes > 0
+                    ? "Downloaded " + FormatBytes(downloadedBytes) + " so far."
+                    : "Waiting for MEGAcmd download data...";
+
+                progress?.Report(new ClientDownloadProgress
+                {
+                    Stage = "MegaDownloading",
+                    CurrentFile = expectedFileName,
+                    BytesDownloaded = downloadedBytes,
+                    Message = "Downloading " + expectedFileName + "\r\n" + sizeMessage + "\r\nElapsed " + FormatDuration(elapsed) + "."
+                });
+            }, null, 5000, 5000))
+            {
+                var megaSource = GetMegaDownloadSource(megaLink, expectedFileName);
+                var output = await RunProcessAsync(megaGet, $"\"{megaSource}\" \"{downloadFolder}\"", line =>
+                {
+                    if (string.IsNullOrWhiteSpace(line))
+                        return;
+
+                    progress?.Report(new ClientDownloadProgress
+                    {
+                        Stage = "MegaDownloading",
+                        CurrentFile = expectedFileName,
+                        BytesDownloaded = GetExpectedDownloadSize(downloadFolder, expectedFileName),
+                        Message = line.Trim()
+                    });
+                }, cancellationToken);
+
+                if (output.ExitCode != 0)
+                    throw new InvalidOperationException("MEGAcmd download failed with exit code " + output.ExitCode + ".\r\n" + output.Output.Trim());
+            }
+
+            DeleteUnexpectedMegaDownloads(downloadFolder, expectedFileName);
+        }
+
+        private static string GetMegaDownloadSource(string megaLink, string expectedFileName)
+        {
+            if (string.IsNullOrWhiteSpace(expectedFileName) ||
+                megaLink.IndexOf("/file/", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return megaLink;
+            }
+
+            // MEGAcmd can download a direct exported file link by itself. Public folder links
+            // generally do not expose a stable child-file path to mega-get, so keep the folder
+            // source but enforce the expected archive before extraction.
+            return megaLink;
+        }
+
+        public static string FindDownloadedArchive(string downloadFolder, string expectedFileName = null)
+        {
+            if (!Directory.Exists(downloadFolder))
+                return null;
+
+            var archiveExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".7z", ".zip", ".rar" };
+            var archives = Directory
+                .EnumerateFiles(downloadFolder, "*.*", SearchOption.AllDirectories)
+                .Where(path => archiveExtensions.Contains(Path.GetExtension(path)))
+                .ToList();
+
+            if (!string.IsNullOrWhiteSpace(expectedFileName))
+            {
+                return archives.FirstOrDefault(path =>
+                    string.Equals(Path.GetFileName(path), expectedFileName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return archives
+                .OrderByDescending(path => new FileInfo(path).Length)
+                .FirstOrDefault();
+        }
+
+        private static long GetExpectedDownloadSize(string downloadFolder, string expectedFileName)
+        {
+            if (!string.IsNullOrWhiteSpace(expectedFileName))
+            {
+                try
+                {
+                    var expectedPath = Directory.EnumerateFiles(downloadFolder, expectedFileName, SearchOption.AllDirectories).FirstOrDefault();
+                    if (expectedPath != null)
+                        return new FileInfo(expectedPath).Length;
+                }
+                catch
+                {
+                    // Fall back to directory size below
+                }
+            }
+
+            return GetDirectorySize(downloadFolder);
+        }
+
+        private static void DeleteUnexpectedMegaDownloads(string downloadFolder, string expectedFileName)
+        {
+            if (string.IsNullOrWhiteSpace(expectedFileName) || !Directory.Exists(downloadFolder))
+                return;
+
+            foreach (var path in Directory.EnumerateFiles(downloadFolder, "*", SearchOption.AllDirectories))
+            {
+                if (string.Equals(Path.GetFileName(path), expectedFileName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                try { File.Delete(path); } catch { /* best effort */ }
+            }
+        }
+
         // Archives seen inside the extracted client that also need unpacking ("double packed")
         private static readonly string[] NestedArchiveExtensions = { ".zip", ".7z", ".rar" };
 
@@ -132,10 +302,22 @@ namespace AAEmu.Launcher.Basic
             if (!File.Exists(mainArchive))
                 throw new FileNotFoundException("Main client archive part not found", mainArchive);
 
+            ExtractArchive(mainArchive, destinationFolder, progress);
+        }
+
+        public static void ExtractArchive(string archivePath, string destinationFolder, IProgress<ClientDownloadProgress> progress = null)
+        {
+            var sevenZip = Find7ZipExecutable();
+            if (sevenZip == null)
+                throw new InvalidOperationException("7-Zip (7z.exe/7za.exe) was not found. The bundled copy may have been removed; reinstall the launcher or install 7-Zip (https://www.7-zip.org/).");
+
+            if (!File.Exists(archivePath))
+                throw new FileNotFoundException("Client archive not found", archivePath);
+
             Directory.CreateDirectory(destinationFolder);
 
-            progress?.Report(new ClientDownloadProgress { Stage = "Extracting", CurrentFile = MainArchiveFileName });
-            RunSevenZipExtract(sevenZip, mainArchive, destinationFolder);
+            progress?.Report(new ClientDownloadProgress { Stage = "Extracting", CurrentFile = Path.GetFileName(archivePath) });
+            RunSevenZipExtract(sevenZip, archivePath, destinationFolder);
 
             // The client is "double packed": extracting the main archive can leave one or more
             // nested archives behind that need extracting in turn before the game files show up.
@@ -146,14 +328,122 @@ namespace AAEmu.Launcher.Basic
                 if (nestedArchives.Count == 0)
                     break;
 
-                foreach (var archivePath in nestedArchives)
+                foreach (var nestedArchivePath in nestedArchives)
                 {
-                    progress?.Report(new ClientDownloadProgress { Stage = "Extracting", CurrentFile = Path.GetFileName(archivePath) });
-                    var extractInto = Path.GetDirectoryName(archivePath);
-                    RunSevenZipExtract(sevenZip, archivePath, extractInto);
-                    try { File.Delete(archivePath); } catch { /* best effort */ }
+                    progress?.Report(new ClientDownloadProgress { Stage = "Extracting", CurrentFile = Path.GetFileName(nestedArchivePath) });
+                    var extractInto = Path.GetDirectoryName(nestedArchivePath);
+                    RunSevenZipExtract(sevenZip, nestedArchivePath, extractInto);
+                    try { File.Delete(nestedArchivePath); } catch { /* best effort */ }
                 }
             }
+        }
+
+        private static long GetDirectorySize(string folder)
+        {
+            try
+            {
+                if (!Directory.Exists(folder))
+                    return 0;
+
+                return Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+                    .Sum(path =>
+                    {
+                        try { return new FileInfo(path).Length; }
+                        catch { return 0L; }
+                    });
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            if (bytes >= 1024L * 1024L * 1024L)
+                return (bytes / 1024D / 1024D / 1024D).ToString("0.0") + " GB";
+            if (bytes >= 1024L * 1024L)
+                return (bytes / 1024D / 1024D).ToString("0") + " MB";
+            if (bytes >= 1024L)
+                return (bytes / 1024D).ToString("0") + " KB";
+            return bytes + " bytes";
+        }
+
+        private static string FormatDuration(TimeSpan duration)
+        {
+            if (duration.TotalHours >= 1)
+                return duration.ToString(@"h\:mm\:ss");
+            return duration.ToString(@"m\:ss");
+        }
+
+        private static Task<ProcessRunResult> RunProcessAsync(string fileName, string arguments, Action<string> outputLineReceived, CancellationToken cancellationToken)
+        {
+            return Task.Run(() =>
+            {
+                var output = new System.Text.StringBuilder();
+                var psiFileName = fileName;
+                var psiArguments = arguments;
+                if (string.Equals(Path.GetExtension(fileName), ".bat", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(Path.GetExtension(fileName), ".cmd", StringComparison.OrdinalIgnoreCase))
+                {
+                    psiFileName = "cmd.exe";
+                    psiArguments = "/c \"\"" + fileName + "\" " + arguments + "\"";
+                }
+
+                var psi = new ProcessStartInfo(psiFileName, psiArguments)
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                };
+
+                using (var process = new Process { StartInfo = psi, EnableRaisingEvents = true })
+                {
+                    process.OutputDataReceived += (s, e) =>
+                    {
+                        if (e.Data == null)
+                            return;
+                        output.AppendLine(e.Data);
+                        outputLineReceived?.Invoke(e.Data);
+                    };
+                    process.ErrorDataReceived += (s, e) =>
+                    {
+                        if (e.Data == null)
+                            return;
+                        output.AppendLine(e.Data);
+                        outputLineReceived?.Invoke(e.Data);
+                    };
+                    process.Start();
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
+
+                    using (cancellationToken.Register(() =>
+                    {
+                        try
+                        {
+                            if (!process.HasExited)
+                                process.Kill();
+                        }
+                        catch
+                        {
+                            // Best effort cancellation
+                        }
+                    }))
+                    {
+                        process.WaitForExit();
+                    }
+
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return new ProcessRunResult { ExitCode = process.ExitCode, Output = output.ToString() };
+                }
+            }, cancellationToken);
+        }
+
+        private class ProcessRunResult
+        {
+            public int ExitCode;
+            public string Output;
         }
 
         private static void RunSevenZipExtract(string sevenZipExe, string archivePath, string destinationFolder)

@@ -45,6 +45,7 @@ namespace AAEmu.Launcher
         {
             public const string DefaultLauncherUpdateRepo = "Crybb227/AA-Emu-Launcher";
             public const string DefaultAAClientDownloadLocation = "https://github.com/Crybb227/AA-Emu-Client-AA";
+            public const string DefaultAA35ClientDownloadLocation = "https://mega.nz/folder/C3Q0WQjT#vRUethZLPiYSo2B4nE_etg/folder/T2QmRRZZ";
             public const string DefaultWoWClientDownloadLocation = "https://github.com/Crybb227/AA-Emu-Client-WoW";
             public const string LegacyAAClientGoogleDriveLocation = "https://drive.google.com/drive/folders/1_pIBVHIm1YFal-nteGaVuXjTv3Yrsv4Q";
 
@@ -68,6 +69,12 @@ namespace AAEmu.Launcher
 
             [JsonProperty("aaDownloadLocation", NullValueHandling = NullValueHandling.Ignore)]
             public string AADownloadLocation { get; set; } = DefaultAAClientDownloadLocation;
+
+            [JsonProperty("aa35Path", NullValueHandling = NullValueHandling.Ignore)]
+            public string AA35Path { get; set; } = string.Empty;
+
+            [JsonProperty("aa35DownloadLocation", NullValueHandling = NullValueHandling.Ignore)]
+            public string AA35DownloadLocation { get; set; } = DefaultAA35ClientDownloadLocation;
 
             [JsonProperty("wowPath", NullValueHandling = NullValueHandling.Ignore)]
             public string WoWPath { get; set; } = string.Empty;
@@ -140,6 +147,8 @@ namespace AAEmu.Launcher
                 setting.PathToGame = "";
                 setting.AAPath = "";
                 setting.AADownloadLocation = DefaultAAClientDownloadLocation;
+                setting.AA35Path = "";
+                setting.AA35DownloadLocation = DefaultAA35ClientDownloadLocation;
                 setting.WoWPath = "";
                 setting.WoWDownloadLocation = DefaultWoWClientDownloadLocation;
                 setting.ServerIpAddress = "127.0.0.1";
@@ -520,6 +529,7 @@ namespace AAEmu.Launcher
         private Label lBrandSubtitle;
         private Panel pGameHeader;
         private Label lGameArcheAge;
+        private Label lGameArcheAge35;
         private Label lGameJasonWoW;
         private Label lGamePlaceholder;
         private Label lInstallStatus;
@@ -692,12 +702,17 @@ namespace AAEmu.Launcher
             lLogo.TextAlign = ContentAlignment.MiddleLeft;
             lGameArcheAge = CreateGameIcon("AA", new Point(144, 64), true);
             lGameArcheAge.Click += (s, e) => SelectLauncherGame("aa");
-            lGameJasonWoW = CreateGameIcon("JW", new Point(210, 64), false);
+            lGameArcheAge35 = CreateGameIcon("AA 3.5", new Point(210, 64), false);
+            lGameArcheAge35.Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            lGameArcheAge35.Size = new Size(68, 44);
+            lGameArcheAge35.Click += (s, e) => SelectLauncherGame("aa35");
+            lGameJasonWoW = CreateGameIcon("JW", new Point(288, 64), false);
             lGameJasonWoW.Click += (s, e) => SelectLauncherGame("jw");
-            lGamePlaceholder = CreateGameIcon("+", new Point(276, 64), false);
+            lGamePlaceholder = CreateGameIcon("+", new Point(354, 64), false);
 
             pGameHeader.Controls.Add(lLogo);
             pGameHeader.Controls.Add(lGameArcheAge);
+            pGameHeader.Controls.Add(lGameArcheAge35);
             pGameHeader.Controls.Add(lGameJasonWoW);
             pGameHeader.Controls.Add(lGamePlaceholder);
             Controls.Add(pGameHeader);
@@ -767,31 +782,56 @@ namespace AAEmu.Launcher
             SaveSelectedGameFields();
             selectedGameId = gameId;
             var isAa = selectedGameId == "aa";
+            var isAa35 = selectedGameId == "aa35";
 
             SetGameIconSelected(lGameArcheAge, isAa);
-            SetGameIconSelected(lGameJasonWoW, !isAa);
+            SetGameIconSelected(lGameArcheAge35, isAa35);
+            SetGameIconSelected(lGameJasonWoW, selectedGameId == "jw");
 
-            lHeroTitle.Text = isAa ? "ARCHEAGE" : "JASONWOW";
-            lHeroNewsTitle.Text = isAa ? "News & Updates" : "JasonWoW";
-            lHeroNewsBody.Text = isAa
-                ? "Install, patch, and launch private server clients from one place."
-                : "JasonWoW is selected. Add its install/update profile next.";
+            lHeroTitle.Text = selectedGameId == "jw" ? "JASONWOW" : "ARCHEAGE";
+            lHeroNewsTitle.Text = isAa35 ? "AA Trion 3.5" : selectedGameId == "jw" ? "JasonWoW" : "News & Updates";
+            lHeroNewsBody.Text = isAa35
+                ? "AA 3.5.0.3 - Trion - r342464 - 2017-06-08 is selected."
+                : isAa
+                    ? "Install, patch, and launch private server clients from one place."
+                    : "JasonWoW is selected. Add its install/update profile next.";
+            ApplySelectedGameToLegacySettings();
             LoadSelectedGameFields();
             UpdateInstallStatus();
             UpdatePlayButton(serverCheckStatus, false);
             Invalidate(true);
         }
 
-        private string SelectedGameDisplayName => selectedGameId == "jw" ? "WoW" : "AA";
+        private bool IsArcheAgeSelected => selectedGameId == "aa" || selectedGameId == "aa35";
+
+        private string SelectedGameDisplayName
+        {
+            get
+            {
+                if (selectedGameId == "jw")
+                    return "WoW";
+                if (selectedGameId == "aa35")
+                    return "AA 3.5";
+                return "AA";
+            }
+        }
 
         private string GetSelectedGamePath()
         {
-            return selectedGameId == "jw" ? Setting.WoWPath : GetAAPath();
+            if (selectedGameId == "jw")
+                return Setting.WoWPath;
+            if (selectedGameId == "aa35")
+                return Setting.AA35Path;
+            return GetAAPath();
         }
 
         private string GetSelectedDownloadLocation()
         {
-            return selectedGameId == "jw" ? GetWoWDownloadLocation() : GetAADownloadLocation();
+            if (selectedGameId == "jw")
+                return GetWoWDownloadLocation();
+            if (selectedGameId == "aa35")
+                return GetAA35DownloadLocation();
+            return GetAADownloadLocation();
         }
 
         private string GetAAPath()
@@ -808,6 +848,13 @@ namespace AAEmu.Launcher
             return LauncherFileSettings.DefaultAAClientDownloadLocation;
         }
 
+        private string GetAA35DownloadLocation()
+        {
+            if (!string.IsNullOrWhiteSpace(Setting.AA35DownloadLocation))
+                return Setting.AA35DownloadLocation;
+            return LauncherFileSettings.DefaultAA35ClientDownloadLocation;
+        }
+
         private string GetWoWDownloadLocation()
         {
             if (!string.IsNullOrWhiteSpace(Setting.WoWDownloadLocation))
@@ -822,11 +869,29 @@ namespace AAEmu.Launcher
                 string.Equals(downloadLocation.TrimEnd('/'), LauncherFileSettings.LegacyAAClientGoogleDriveLocation, StringComparison.OrdinalIgnoreCase);
         }
 
+        private bool IsMegaDownloadLocation(string downloadLocation)
+        {
+            return !string.IsNullOrWhiteSpace(downloadLocation) &&
+                Uri.TryCreate(downloadLocation, UriKind.Absolute, out var uri) &&
+                uri.Host.EndsWith("mega.nz", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsManifestBasedDownloadLocation(string downloadLocation)
+        {
+            return !string.IsNullOrWhiteSpace(downloadLocation) &&
+                !IsLegacyAAClientGoogleDriveLocation(downloadLocation) &&
+                !IsMegaDownloadLocation(downloadLocation);
+        }
+
         private void SetSelectedGamePath(string path)
         {
             if (selectedGameId == "jw")
             {
                 Setting.WoWPath = path;
+            }
+            else if (selectedGameId == "aa35")
+            {
+                Setting.AA35Path = path;
             }
             else
             {
@@ -841,10 +906,31 @@ namespace AAEmu.Launcher
             {
                 Setting.WoWDownloadLocation = url;
             }
+            else if (selectedGameId == "aa35")
+            {
+                Setting.AA35DownloadLocation = url;
+            }
             else
             {
                 Setting.AADownloadLocation = url;
                 Setting.ServerGameUpdateURL = url;
+            }
+        }
+
+        private void ApplySelectedGameToLegacySettings()
+        {
+            if (selectedGameId == "aa35")
+            {
+                Setting.PathToGame = Setting.AA35Path;
+                Setting.ServerGameUpdateURL = GetAA35DownloadLocation();
+                Setting.ClientLoginType = stringTrino_3_5;
+            }
+            else if (selectedGameId == "aa")
+            {
+                Setting.PathToGame = GetAAPath();
+                Setting.ServerGameUpdateURL = GetAADownloadLocation();
+                if (string.IsNullOrWhiteSpace(Setting.ClientLoginType) || Setting.ClientLoginType == stringTrino_3_5)
+                    Setting.ClientLoginType = stringTrino_1_2;
             }
         }
 
@@ -868,6 +954,11 @@ namespace AAEmu.Launcher
             eDownloadLocation.Text = GetSelectedDownloadLocation();
             if (selectedGameId == "jw")
                 lGameClientType.Text = "JasonWoW";
+            else if (selectedGameId == "aa35")
+            {
+                Setting.ClientLoginType = stringTrino_3_5;
+                UpdateGameClientTypeLabel();
+            }
             else
                 UpdateGameClientTypeLabel();
         }
@@ -1128,7 +1219,14 @@ namespace AAEmu.Launcher
             using (var cardBrush = new SolidBrush(Color.FromArgb(220, 31, 35, 45)))
                 e.Graphics.FillRectangle(cardBrush, new Rectangle(880, 190, 340, 286));
             using (var headerLine = new SolidBrush(Color.FromArgb(54, 139, 235)))
-                e.Graphics.FillRectangle(headerLine, new Rectangle(144, 119, 56, 3));
+            {
+                var indicator = selectedGameId == "aa35"
+                    ? new Rectangle(210, 119, 68, 3)
+                    : selectedGameId == "jw"
+                        ? new Rectangle(288, 119, 56, 3)
+                        : new Rectangle(144, 119, 56, 3);
+                e.Graphics.FillRectangle(headerLine, indicator);
+            }
         }
 
         private void ModernPanel_Paint(object sender, PaintEventArgs e)
@@ -1802,6 +1900,8 @@ namespace AAEmu.Launcher
                 Setting.AADownloadLocation = string.IsNullOrWhiteSpace(Setting.ServerGameUpdateURL)
                     ? LauncherFileSettings.DefaultAAClientDownloadLocation
                     : Setting.ServerGameUpdateURL;
+            if (string.IsNullOrWhiteSpace(Setting.AA35DownloadLocation))
+                Setting.AA35DownloadLocation = LauncherFileSettings.DefaultAA35ClientDownloadLocation;
             if (string.IsNullOrWhiteSpace(Setting.WoWDownloadLocation))
                 Setting.WoWDownloadLocation = LauncherFileSettings.DefaultWoWClientDownloadLocation;
 
@@ -1872,7 +1972,7 @@ namespace AAEmu.Launcher
             {
                 lInstallStatus.Text = "Installed\n" + ClientDeltaUpdater.GetGameRoot(GetSelectedGamePath());
                 var downloadLocation = GetSelectedDownloadLocation();
-                var canCheckUpdates = !string.IsNullOrWhiteSpace(downloadLocation) && !IsLegacyAAClientGoogleDriveLocation(downloadLocation);
+                var canCheckUpdates = IsManifestBasedDownloadLocation(downloadLocation);
                 lClientUpdateAction.Enabled = true;
                 lClientUpdateAction.Cursor = Cursors.Hand;
                 lClientUpdateAction.ForeColor = canCheckUpdates ? ModernText : ModernMutedText;
@@ -1953,6 +2053,8 @@ namespace AAEmu.Launcher
 
         private void UpdatePanelLabels()
         {
+            if (string.IsNullOrWhiteSpace(Setting.AA35DownloadLocation))
+                Setting.AA35DownloadLocation = LauncherFileSettings.DefaultAA35ClientDownloadLocation;
             lLoadedConfig.Text = Setting.ConfigName;
             eServerIP.Text = Setting.ServerIpAddress;
 
@@ -2024,6 +2126,8 @@ namespace AAEmu.Launcher
                 Setting.AADownloadLocation = string.IsNullOrWhiteSpace(Setting.ServerGameUpdateURL)
                     ? LauncherFileSettings.DefaultAAClientDownloadLocation
                     : Setting.ServerGameUpdateURL;
+            if (string.IsNullOrWhiteSpace(Setting.AA35DownloadLocation))
+                Setting.AA35DownloadLocation = LauncherFileSettings.DefaultAA35ClientDownloadLocation;
             if (string.IsNullOrWhiteSpace(Setting.WoWDownloadLocation))
                 Setting.WoWDownloadLocation = LauncherFileSettings.DefaultWoWClientDownloadLocation;
 
@@ -2130,6 +2234,8 @@ namespace AAEmu.Launcher
 
         private void StartGame()
         {
+            ApplySelectedGameToLegacySettings();
+
             if (selectedGameId == "jw")
             {
                 StartSelectedExecutable();
@@ -2344,8 +2450,7 @@ namespace AAEmu.Launcher
         {
             SaveSelectedGameFields();
             Setting.ConfigVersion = 1;
-            Setting.PathToGame = Setting.AAPath;
-            Setting.ServerGameUpdateURL = Setting.AADownloadLocation;
+            ApplySelectedGameToLegacySettings();
             // Try saving lookups after we set the path
             SaveClientLookups();
 
@@ -2542,6 +2647,7 @@ namespace AAEmu.Launcher
                     lGameClientType.ForeColor = Color.FromArgb(250, 210, 90);
             }
             Application.UseWaitCursor = false;
+            ApplySelectedGameToLegacySettings();
         }
 
         private void lGamePath_Click(object sender, EventArgs e)
@@ -2600,13 +2706,44 @@ namespace AAEmu.Launcher
                     return;
 
                 var downloadLocation = GetSelectedDownloadLocation();
-                if (!IsLegacyAAClientGoogleDriveLocation(downloadLocation) && !string.IsNullOrWhiteSpace(downloadLocation))
+                if (IsMegaDownloadLocation(downloadLocation))
+                {
+                    if (ClientDownloadManager.FindMegaGetExecutable() == null)
+                    {
+                        var installMegaCmd = MessageBox.Show(this,
+                            "AA 3.5 downloads use MEGAcmd so the launcher can download and extract the client automatically.\r\n\r\nInstall MEGAcmd from MEGA now?",
+                            "MEGAcmd Required", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                        if (installMegaCmd == DialogResult.Yes)
+                            Process.Start(new ProcessStartInfo(ClientDownloadManager.MegaCmdDownloadPage) { UseShellExecute = true });
+                        return;
+                    }
+
+                    using (var dlg = new ClientDownloadForm(folderDialog.SelectedPath, downloadLocation, ClientDownloadManager.AA35ArchiveFileName))
+                    {
+                        var result = dlg.ShowDialog(this);
+                        if (result == DialogResult.OK && !string.IsNullOrEmpty(dlg.DetectedExePath))
+                        {
+                            SetSelectedGamePath(dlg.DetectedExePath);
+                            lGamePath.Text = GetSelectedGamePath();
+                            Setting.ClientLoginType = stringTrino_3_5;
+                            ApplySelectedGameToLegacySettings();
+                            UpdateGameClientTypeLabel();
+                            SaveSettings();
+                            UpdateInstallStatus();
+                            UpdatePlayButton(serverCheckStatus, false);
+                            MessageBox.Show(this, "AA 3.5 downloaded and installed successfully.", "Download Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                    }
+                    return;
+                }
+
+                if (IsManifestBasedDownloadLocation(downloadLocation))
                 {
                     InstallFromManifestLocation(folderDialog.SelectedPath, downloadLocation);
                     return;
                 }
 
-                if (selectedGameId != "aa")
+                if (!IsArcheAgeSelected)
                 {
                     MessageBox.Show(this, "Set a WoW Download Location URL before installing JasonWoW.", "Install", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
@@ -2622,7 +2759,8 @@ namespace AAEmu.Launcher
                         // The client from this Google Drive package is always the same known AAEmu test client
                         // (r208022, ArcheAge 1.2 protocol) - the world.xml date heuristic in GuessLauncher() is
                         // unreliable for repacked test clients, so set it directly instead of guessing.
-                        Setting.ClientLoginType = stringTrino_1_2;
+                        Setting.ClientLoginType = selectedGameId == "aa35" ? stringTrino_3_5 : stringTrino_1_2;
+                        ApplySelectedGameToLegacySettings();
                         UpdateGameClientTypeLabel();
                         SaveSettings();
                         UpdateInstallStatus();
@@ -2747,10 +2885,10 @@ namespace AAEmu.Launcher
                 MessageBox.Show(this, "No " + SelectedGameDisplayName + " Download Location URL is configured.", "Client Updates", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            if (IsLegacyAAClientGoogleDriveLocation(downloadLocation))
+            if (!IsManifestBasedDownloadLocation(downloadLocation))
             {
                 MessageBox.Show(this,
-                    "Client update checks need a manifest-based Download Location URL, such as a web folder or GitHub tree containing client/manifest.json. The legacy Google Drive package can install the client, but it does not provide update manifests.",
+                    "Client update checks need a manifest-based Download Location URL, such as a web folder or GitHub tree containing client/manifest.json. This download location opens in your browser and does not provide update manifests.",
                     "Client Updates", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }

@@ -19,24 +19,28 @@ namespace AAEmu.Launcher
         private readonly Button btnCancel;
         private readonly BackgroundWorker worker;
         private CancellationTokenSource cts;
+        private readonly string megaDownloadLocation;
+        private readonly string expectedArchiveFileName;
 
         public string DestinationGameFolder { get; }
         public string DetectedExePath { get; private set; }
 
-        public ClientDownloadForm(string destinationGameFolder)
+        public ClientDownloadForm(string destinationGameFolder, string megaDownloadLocation = null, string expectedArchiveFileName = null)
         {
             DestinationGameFolder = destinationGameFolder;
+            this.megaDownloadLocation = megaDownloadLocation;
+            this.expectedArchiveFileName = expectedArchiveFileName;
 
-            Text = "Downloading Game Client";
-            ClientSize = new Size(420, 120);
+            Text = string.IsNullOrWhiteSpace(megaDownloadLocation) ? "Downloading Game Client" : "Downloading MEGA Client";
+            ClientSize = new Size(560, 160);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
             MaximizeBox = false;
             MinimizeBox = false;
 
-            lStatus = new Label { Left = 12, Top = 12, Width = 396, Height = 40, Text = "Preparing download..." };
-            pbProgress = new ProgressBar { Left = 12, Top = 56, Width = 396, Height = 24, Minimum = 0, Maximum = 100 };
-            btnCancel = new Button { Left = 318, Top = 86, Width = 90, Height = 26, Text = "Cancel" };
+            lStatus = new Label { Left = 12, Top = 12, Width = 536, Height = 78, Text = "Preparing download..." };
+            pbProgress = new ProgressBar { Left = 12, Top = 96, Width = 536, Height = 24, Minimum = 0, Maximum = 100 };
+            btnCancel = new Button { Left = 458, Top = 126, Width = 90, Height = 26, Text = "Cancel" };
             btnCancel.Click += BtnCancel_Click;
 
             Controls.Add(lStatus);
@@ -76,14 +80,30 @@ namespace AAEmu.Launcher
 
             var progress = new Progress<ClientDownloadProgress>(p => worker.ReportProgress(0, p));
 
-            ClientDownloadManager.DownloadAllPartsAsync(downloadFolder, progress, token).GetAwaiter().GetResult();
-            token.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(megaDownloadLocation))
+            {
+                ClientDownloadManager.DownloadAllPartsAsync(downloadFolder, progress, token).GetAwaiter().GetResult();
+                token.ThrowIfCancellationRequested();
 
-            ClientDownloadManager.ExtractClient(downloadFolder, DestinationGameFolder, progress);
-            token.ThrowIfCancellationRequested();
+                ClientDownloadManager.ExtractClient(downloadFolder, DestinationGameFolder, progress);
+                token.ThrowIfCancellationRequested();
 
-            ClientDownloadManager.CleanupDownloadedParts(downloadFolder);
-            try { Directory.Delete(downloadFolder); } catch { /* best effort */ }
+                ClientDownloadManager.CleanupDownloadedParts(downloadFolder);
+            }
+            else
+            {
+                ClientDownloadManager.DownloadMegaLinkAsync(megaDownloadLocation, downloadFolder, expectedArchiveFileName, progress, token).GetAwaiter().GetResult();
+                token.ThrowIfCancellationRequested();
+
+                var archivePath = ClientDownloadManager.FindDownloadedArchive(downloadFolder, expectedArchiveFileName);
+                if (string.IsNullOrWhiteSpace(archivePath))
+                    throw new FileNotFoundException("MEGA download completed, but the expected client archive was not found: " + expectedArchiveFileName);
+
+                ClientDownloadManager.ExtractArchive(archivePath, DestinationGameFolder, progress);
+                token.ThrowIfCancellationRequested();
+            }
+
+            try { Directory.Delete(downloadFolder, true); } catch { /* best effort */ }
 
             DetectedExePath = ClientDownloadManager.FindGameExecutable(DestinationGameFolder);
         }
@@ -96,7 +116,14 @@ namespace AAEmu.Launcher
             if (p.Stage == "Extracting")
             {
                 pbProgress.Style = ProgressBarStyle.Marquee;
-                lStatus.Text = "Extracting game client, this can take a while...";
+                lStatus.Text = "Extracting " + p.CurrentFile + ", this can take a while...";
+                return;
+            }
+
+            if (p.Stage == "MegaDownloading")
+            {
+                pbProgress.Style = ProgressBarStyle.Marquee;
+                lStatus.Text = string.IsNullOrWhiteSpace(p.Message) ? "Downloading from MEGA..." : p.Message;
                 return;
             }
 
