@@ -1,9 +1,8 @@
 name: Build and Release Launcher
 
-# Publishes a friend-friendly portable ZIP plus delta-update assets.
+# Publishes a friend-friendly portable ZIP.
 # Friends should download AAEmu-Launcher-vX.X.X.X.zip, extract it, and run
-# "Start Launcher.bat". The flattened files and manifest.json are still uploaded
-# so GitHubReleaseUpdater can download only changed files after install.
+# "Start Launcher.bat".
 
 on:
   push:
@@ -56,7 +55,7 @@ jobs:
       - name: Build (Release)
         run: msbuild AAEmu-Launcher.sln /p:Configuration=Release /p:Platform="Any CPU" /m
 
-      - name: Generate delta assets and portable ZIP
+      - name: Generate portable ZIP
         shell: pwsh
         run: |
           $outDir = "AAEmu.Launcher/bin/Release"
@@ -66,27 +65,6 @@ jobs:
           $zipName = "AAEmu-Launcher-v${{ steps.version.outputs.version }}.zip"
           New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
           New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
-
-          $manifestFiles = @()
-          Get-ChildItem -Path $outDir -Recurse -File | ForEach-Object {
-            $relativePath = $_.FullName.Substring((Resolve-Path $outDir).Path.Length + 1) -replace '\\', '/'
-            $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLower()
-
-            $manifestFiles += [PSCustomObject]@{
-              path   = $relativePath
-              sha256 = $hash
-              size   = $_.Length
-            }
-
-            $flatName = $relativePath -replace '/', '_'
-            Copy-Item -Path $_.FullName -Destination (Join-Path $stagingDir $flatName) -Force
-          }
-
-          $manifest = [PSCustomObject]@{
-            version = "${{ steps.version.outputs.version }}"
-            files   = $manifestFiles
-          }
-          $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $stagingDir "manifest.json")
 
           Copy-Item -Path "$outDir/*" -Destination $packageDir -Recurse -Force
 
@@ -121,7 +99,5 @@ jobs:
             ## Download
 
             Download **AAEmu-Launcher-v${{ steps.version.outputs.version }}.zip**, extract it, then run **Start Launcher.bat**.
-
-            The other release assets are used by the launcher's built-in delta updater.
-          files: release-assets/*
+          files: release-assets/*.zip
           generate_release_notes: true
