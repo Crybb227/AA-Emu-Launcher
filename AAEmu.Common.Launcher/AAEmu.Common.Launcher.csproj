@@ -100,6 +100,8 @@
   <ItemGroup>
     <Compile Include="AAAutoDetectClient.cs" />
     <Compile Include="BaseLauncher.cs" />
+    <Compile Include="ClientDownloadManager.cs" />
+    <Compile Include="GoogleDriveDownloader.cs" />
     <Compile Include="XLGamesWorld10Launcher.cs" />
     <Compile Include="Kakao80Launcher.cs" />
     <Compile Include="MailRu10Launcher.cs" />

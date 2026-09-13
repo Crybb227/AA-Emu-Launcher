@@ -81,6 +81,7 @@
             this.lSettingsBack = new System.Windows.Forms.Label();
             this.lIPAddress = new System.Windows.Forms.Label();
             this.lGamePath = new System.Windows.Forms.Label();
+            this.lDownloadClient = new System.Windows.Forms.Label();
             this.lHideSplash = new System.Windows.Forms.Label();
             this.cbHideSplash = new System.Windows.Forms.Label();
             this.cbSkipIntro = new System.Windows.Forms.Label();
@@ -750,6 +751,20 @@
             this.lGamePath.UseMnemonic = false;
             this.lGamePath.Click += new System.EventHandler(this.lGamePath_Click);
             // 
+            // lDownloadClient
+            // 
+            this.lDownloadClient.BackColor = System.Drawing.Color.Transparent;
+            this.lDownloadClient.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.lDownloadClient.Font = new System.Drawing.Font("Georgia", 8.25F, System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lDownloadClient.ForeColor = System.Drawing.Color.White;
+            this.lDownloadClient.Location = new System.Drawing.Point(24, 288);
+            this.lDownloadClient.Name = "lDownloadClient";
+            this.lDownloadClient.Size = new System.Drawing.Size(223, 20);
+            this.lDownloadClient.TabIndex = 31;
+            this.lDownloadClient.Text = "Download Game Client";
+            this.lDownloadClient.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.lDownloadClient.Click += new System.EventHandler(this.lDownloadClient_Click);
+            // 
             // lHideSplash
             // 
             this.lHideSplash.BackColor = System.Drawing.Color.Transparent;
@@ -1209,6 +1224,7 @@
             this.panelSettings.Controls.Add(this.eServerIP);
             this.panelSettings.Controls.Add(this.lPathToGameLabel);
             this.panelSettings.Controls.Add(this.lGamePath);
+            this.panelSettings.Controls.Add(this.lDownloadClient);
             this.panelSettings.Controls.Add(this.lGameClientType);
             this.panelSettings.Controls.Add(this.btnLocaleLang);
             this.panelSettings.Controls.Add(this.cbAllowUpdates);
@@ -1443,6 +1459,7 @@
         private System.Windows.Forms.ContextMenuStrip cmsAAEmuButton;
         private System.Windows.Forms.Label lSettingsBack;
         private System.Windows.Forms.Label lGamePath;
+        private System.Windows.Forms.Label lDownloadClient;
         private System.Windows.Forms.Label lHideSplash;
         private System.Windows.Forms.Label cbHideSplash;
         private System.Windows.Forms.Label cbSkipIntro;

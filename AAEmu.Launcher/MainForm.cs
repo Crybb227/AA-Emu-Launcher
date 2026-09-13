@@ -22,7 +22,6 @@ namespace AAEmu.Launcher
     public partial class LauncherForm : Form
     {
 
-        const string urlCheckLauncherUpdate = "https://raw.githubusercontent.com/ZeromusXYZ/AAEmu-Launcher/master/update.ver";
         string AppVersion = "?.?.?.?";
 
         public enum ShowPanelType
@@ -447,6 +446,8 @@ namespace AAEmu.Launcher
         string urlLauncherUpdateDownload = "";
         string LauncherUpdateVersion = "";
         bool checkedForLauncherUpdates = false;
+        public const string launcherUpdateRepo = "Crybb227/AA-Emu-Launcher";
+        LauncherUpdateInfo pendingLauncherUpdate = null;
         public string DefaultGameWorkingDirectory = "";
 
 
@@ -1800,6 +1801,38 @@ namespace AAEmu.Launcher
             }
         }
 
+        private void lDownloadClient_Click(object sender, EventArgs e)
+        {
+            if (serverCheckStatus == serverCheck.Updating)
+                return;
+
+            using (var folderDialog = new FolderBrowserDialog())
+            {
+                folderDialog.Description = "Choose a folder to install the ArcheAge client into";
+                if (!string.IsNullOrEmpty(DefaultGameWorkingDirectory))
+                    folderDialog.SelectedPath = DefaultGameWorkingDirectory;
+
+                if (folderDialog.ShowDialog(this) != DialogResult.OK)
+                    return;
+
+                using (var dlg = new ClientDownloadForm(folderDialog.SelectedPath))
+                {
+                    var result = dlg.ShowDialog(this);
+                    if (result == DialogResult.OK && !string.IsNullOrEmpty(dlg.DetectedExePath))
+                    {
+                        Setting.PathToGame = dlg.DetectedExePath;
+                        lGamePath.Text = Setting.PathToGame;
+                        GuessAndUpdateClientType();
+                        MessageBox.Show(this, "Game client downloaded and installed successfully.", "Download Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else if (result == DialogResult.Abort)
+                    {
+                        // Error already shown by ClientDownloadForm
+                    }
+                }
+            }
+        }
+
         private void cbHideSplash_Click(object sender, EventArgs e)
         {
             Setting.HideSplashLogo = ToggleSettingCheckBox(cbHideSplash, Setting.HideSplashLogo);
@@ -2199,43 +2232,30 @@ namespace AAEmu.Launcher
 
         }
 
-        private void CheckForLauncherUpdates()
+        private async void CheckForLauncherUpdates()
         {
             checkedForLauncherUpdates = true;
             urlLauncherUpdateDownload = "";
             LauncherUpdateVersion = "";
+            pendingLauncherUpdate = null;
             try
             {
-                string verfile = WebHelper.SimpleGetURIAsString(urlCheckLauncherUpdate,5000);
-                verfile = verfile.Replace("\r", "");
-                List<string> sl = new List<string>();
-                sl.AddRange(verfile.Split('\n').ToList());
-                // Needs to be 2 lines
-                if (sl.Count < 2)
+                var updateInfo = await GitHubReleaseUpdater.CheckForUpdateAsync(launcherUpdateRepo, AppVersion);
+                if (updateInfo == null)
                     return;
-                var verline = sl[0].Split(';');
-                var urlline = sl[1].Split(';');
-                if (verline.Length != 2)
-                    return;
-                if (urlline.Length != 2)
-                    return;
-                if (verline[0] != "version")
-                    return;
-                if (urlline[0] != "url")
-                    return;
-                LauncherUpdateVersion = verline[1];
-                urlLauncherUpdateDownload = urlline[1];
 
-                if (LauncherUpdateVersion.CompareTo(AppVersion) > 0)
-                {
-                    lDownloadLauncherUpdate.Text = string.Format(L.DownloadLauncherUpdate, LauncherUpdateVersion);
-                    lDownloadLauncherUpdate.Visible = true;
-                }
+                pendingLauncherUpdate = updateInfo;
+                LauncherUpdateVersion = updateInfo.Version;
+                urlLauncherUpdateDownload = updateInfo.ReleaseUrl;
+
+                lDownloadLauncherUpdate.Text = string.Format(L.DownloadLauncherUpdate, LauncherUpdateVersion);
+                lDownloadLauncherUpdate.Visible = true;
             }
             catch
             {
                 urlLauncherUpdateDownload = "";
                 LauncherUpdateVersion = "";
+                pendingLauncherUpdate = null;
             }
         }
 
@@ -3794,9 +3814,49 @@ namespace AAEmu.Launcher
 
         }
 
-        private void LDownloadLauncherUpdate_Click(object sender, EventArgs e)
+        private async void LDownloadLauncherUpdate_Click(object sender, EventArgs e)
         {
-            Process.Start(urlLauncherUpdateDownload);
+            if (pendingLauncherUpdate?.Manifest == null)
+            {
+                // No delta manifest available for this release, fall back to opening the release page
+                Process.Start(urlLauncherUpdateDownload);
+                return;
+            }
+
+            var confirm = MessageBox.Show(this,
+                $"Launcher update {pendingLauncherUpdate.Version} is available. Download and install it now? The launcher will restart.",
+                "Launcher Update", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes)
+                return;
+
+            var appDirectory = Application.StartupPath;
+            var stagingDirectory = Path.Combine(Path.GetTempPath(), "AAEmuLauncherUpdateStaging_" + Guid.NewGuid().ToString("N"));
+
+            try
+            {
+                Cursor.Current = Cursors.WaitCursor;
+                var changedFiles = GitHubReleaseUpdater.GetChangedFiles(appDirectory, pendingLauncherUpdate.Manifest);
+                if (changedFiles.Count == 0)
+                {
+                    MessageBox.Show(this, "Nothing to update, files already match the latest release.", "Launcher Update", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                await GitHubReleaseUpdater.DownloadChangedFilesAsync(pendingLauncherUpdate, changedFiles, stagingDirectory, null);
+
+                var removedFiles = GitHubReleaseUpdater.GetRemovedFiles(pendingLauncherUpdate.PreviousManifest, pendingLauncherUpdate.Manifest);
+                GitHubReleaseUpdater.ApplyUpdateAndRestart(appDirectory, stagingDirectory, Path.GetFileName(Application.ExecutablePath), removedFiles);
+                SaveSettings();
+                Application.Exit();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Failed to download update:\n{ex.Message}", "Launcher Update", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                Cursor.Current = Cursors.Default;
+            }
         }
 
         private void AaEmuDiscordMenuItem_Click(object sender, EventArgs e)

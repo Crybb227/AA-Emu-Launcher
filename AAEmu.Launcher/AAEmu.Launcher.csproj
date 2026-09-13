@@ -15,26 +15,8 @@
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
     <TargetFrameworkProfile />
-    <PublishUrl>D:\Dev\GitHub\ZeromusXYZ\AAEmu-Launcher\.publish\AAEmu.Launcher\</PublishUrl>
-    <Install>true</Install>
-    <InstallFrom>Disk</InstallFrom>
-    <UpdateEnabled>false</UpdateEnabled>
-    <UpdateMode>Foreground</UpdateMode>
-    <UpdateInterval>7</UpdateInterval>
-    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
-    <UpdatePeriodically>false</UpdatePeriodically>
-    <UpdateRequired>false</UpdateRequired>
-    <MapFileExtensions>true</MapFileExtensions>
-    <SupportUrl>https://github.com/ZeromusXYZ/AAEmu-Launcher/wiki</SupportUrl>
-    <ProductName>AAEmu Launcher</ProductName>
-    <PublisherName>ZeromusXYZ</PublisherName>
-    <SuiteName>AAEmu Launcher</SuiteName>
-    <ApplicationRevision>5</ApplicationRevision>
-    <ApplicationVersion>0.5.6.%2a</ApplicationVersion>
-    <UseApplicationTrust>false</UseApplicationTrust>
-    <CreateDesktopShortcut>true</CreateDesktopShortcut>
-    <PublishWizardCompleted>true</PublishWizardCompleted>
-    <BootstrapperEnabled>true</BootstrapperEnabled>
+    <!-- Lets this project build with the .NET SDK's MSBuild (e.g. VS Code / CI), not just full Visual Studio -->
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -62,22 +44,10 @@
     <ApplicationIcon>aaemu.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup>
-    <ManifestCertificateThumbprint>37D977E1C3B994E1C59520BA3E952922E469FEAF</ManifestCertificateThumbprint>
-  </PropertyGroup>
-  <PropertyGroup>
-    <ManifestKeyFile>AAEmu.Launcher_TemporaryKey.pfx</ManifestKeyFile>
-  </PropertyGroup>
-  <PropertyGroup>
-    <GenerateManifests>true</GenerateManifests>
-  </PropertyGroup>
-  <PropertyGroup>
     <TargetZone>LocalIntranet</TargetZone>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
-  </PropertyGroup>
-  <PropertyGroup>
-    <SignManifests>false</SignManifests>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="AAPacker, Version=1.1.2.0, Culture=neutral, processorArchitecture=MSIL">
@@ -124,6 +94,10 @@
       <Private>True</Private>
       <Private>True</Private>
     </Reference>
+    <Reference Include="System.Resources.Extensions, Version=8.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Resources.Extensions.8.0.0\lib\net462\System.Resources.Extensions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -134,7 +108,18 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Bundled so the client download/extract feature works without a separate 7-Zip install -->
+    <Content Include="..\packages\7-Zip.CommandLine.25.1.0\tools\7za.exe">
+      <Link>7za.exe</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="Helpers.cs" />
+    <Compile Include="ClientDownloadForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="GitHubReleaseUpdater.cs" />
     <Compile Include="InfoPopupForm.cs">
       <SubType>Form</SubType>
     </Compile>

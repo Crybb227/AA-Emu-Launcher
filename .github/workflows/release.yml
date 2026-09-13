@@ -1,0 +1,92 @@
+name: Build and Release Launcher
+
+# Publishes a delta-updatable release: builds the launcher, generates a manifest.json
+# (relative path + sha256 + size for every output file) and uploads each file as a
+# flattened, individually-named release asset so GitHubReleaseUpdater can download
+# only the files that changed since the previous version.
+
+on:
+  push:
+    tags:
+      - "v*.*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart("v", "V")
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Stamp assembly version
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $files = @(
+            "AAEmu.Launcher/Properties/AssemblyInfo.cs",
+            "AAEmu.Common.Launcher/Properties/AssemblyInfo.cs"
+          )
+          foreach ($file in $files) {
+            (Get-Content $file) `
+              -replace 'AssemblyVersion\("[^"]*"\)', "AssemblyVersion(`"$version`")" `
+              -replace 'AssemblyFileVersion\("[^"]*"\)', "AssemblyFileVersion(`"$version`")" |
+              Set-Content $file
+          }
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore AAEmu-Launcher.sln
+
+      - name: Build (Release)
+        run: msbuild AAEmu-Launcher.sln /p:Configuration=Release /p:Platform="Any CPU" /m
+
+      - name: Generate manifest and flatten release assets
+        shell: pwsh
+        run: |
+          $outDir = "AAEmu.Launcher/bin/Release"
+          $stagingDir = "release-assets"
+          New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
+
+          $manifestFiles = @()
+          Get-ChildItem -Path $outDir -Recurse -File | ForEach-Object {
+            $relativePath = $_.FullName.Substring((Resolve-Path $outDir).Path.Length + 1) -replace '\\', '/'
+            $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLower()
+
+            $manifestFiles += [PSCustomObject]@{
+              path   = $relativePath
+              sha256 = $hash
+              size   = $_.Length
+            }
+
+            $flatName = $relativePath -replace '/', '_'
+            Copy-Item -Path $_.FullName -Destination (Join-Path $stagingDir $flatName) -Force
+          }
+
+          $manifest = [PSCustomObject]@{
+            version = "${{ steps.version.outputs.version }}"
+            files   = $manifestFiles
+          }
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $stagingDir "manifest.json")
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Launcher v${{ steps.version.outputs.version }}"
+          files: release-assets/*
+          generate_release_notes: true
