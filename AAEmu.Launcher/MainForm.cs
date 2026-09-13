@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
@@ -485,10 +486,209 @@ namespace AAEmu.Launcher
         public bool DoAutoLaunch { get; set; } = false;
         private bool CancelPatching { get; set; } = false;
 
+        private readonly Color ModernBack = Color.FromArgb(12, 15, 21);
+        private readonly Color ModernPanel = Color.FromArgb(29, 34, 45);
+        private readonly Color ModernPanelAlt = Color.FromArgb(20, 24, 33);
+        private readonly Color ModernAccent = Color.FromArgb(72, 198, 169);
+        private readonly Color ModernAccentHot = Color.FromArgb(92, 224, 190);
+        private readonly Color ModernDanger = Color.FromArgb(210, 74, 86);
+        private readonly Color ModernText = Color.FromArgb(235, 240, 246);
+        private readonly Color ModernMutedText = Color.FromArgb(145, 157, 172);
+        private Label lBrandTitle;
+        private Label lBrandSubtitle;
+
 
         public LauncherForm()
         {
             InitializeComponent();
+            ApplyModernTheme();
+        }
+
+        private void ApplyModernTheme()
+        {
+            Text = "Jason AA Launcher";
+            BackColor = ModernBack;
+            ForeColor = ModernText;
+            BackgroundImage = null;
+            Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point, 0);
+
+            panelLoginAndPatch.BackgroundImage = null;
+            panelSettings.BackgroundImage = null;
+            panelLoginAndPatch.BackColor = Color.Transparent;
+            panelSettings.BackColor = Color.Transparent;
+            panelLoginAndPatch.Paint += ModernPanel_Paint;
+            panelSettings.Paint += ModernPanel_Paint;
+            Paint += LauncherForm_Paint;
+
+            lBrandTitle = new Label
+            {
+                AutoSize = false,
+                BackColor = Color.Transparent,
+                Font = new Font("Segoe UI Semibold", 24F, FontStyle.Bold, GraphicsUnit.Point, 0),
+                ForeColor = ModernText,
+                Location = new Point(36, 22),
+                Size = new Size(520, 48),
+                Text = "Jason AA Launcher"
+            };
+
+            lBrandSubtitle = new Label
+            {
+                AutoSize = false,
+                BackColor = Color.Transparent,
+                Font = new Font("Segoe UI", 9.5F, FontStyle.Regular, GraphicsUnit.Point, 0),
+                ForeColor = ModernMutedText,
+                Location = new Point(39, 68),
+                Size = new Size(520, 24),
+                Text = "AAEmu client launcher, patcher, and server profile"
+            };
+
+            Controls.Add(lBrandTitle);
+            Controls.Add(lBrandSubtitle);
+            lBrandTitle.BringToFront();
+            lBrandSubtitle.BringToFront();
+            lBrandTitle.MouseDown += LauncherForm_MouseDown;
+            lBrandTitle.MouseMove += LauncherForm_MouseMove;
+            lBrandTitle.MouseUp += LauncherForm_MouseUp;
+            lBrandSubtitle.MouseDown += LauncherForm_MouseDown;
+            lBrandSubtitle.MouseMove += LauncherForm_MouseMove;
+            lBrandSubtitle.MouseUp += LauncherForm_MouseUp;
+
+            StyleTextBox(eLogin);
+            StyleTextBox(ePassword);
+            StyleTextBox(eServerIP);
+            cbLoginList.BackColor = Color.FromArgb(22, 27, 36);
+            cbLoginList.ForeColor = ModernText;
+            cbLoginList.Font = new Font("Segoe UI", 9F);
+
+            StyleModernLabel(lLogin, ModernMutedText, 9F);
+            StyleModernLabel(lPassword, ModernMutedText, 9F);
+            StyleModernLabel(lIPAddress, ModernMutedText, 9F);
+            StyleModernLabel(lPathToGameLabel, ModernMutedText, 9F);
+            StyleModernLabel(lGamePath, ModernText, 9F);
+            StyleModernLabel(lDownloadClient, ModernAccent, 9F);
+            StyleModernLabel(lGameClientType, ModernAccent, 9F);
+            StyleModernLabel(lPatchProgressBarText, ModernText, 11F);
+            StyleModernLabel(lBigNewsImage, ModernAccent, 10F);
+
+            foreach (var label in new[] { lSaveUser, lUpdateLocale, lHideSplash, lSkipIntro, lAllowUpdates })
+                StyleModernLabel(label, ModernText, 9F);
+            foreach (var label in new[] { cbSaveUser, cbUpdateLocale, cbHideSplash, cbSkipIntro, cbAllowUpdates })
+                StyleModernLabel(label, ModernAccent, 13F, FontStyle.Bold);
+
+            lNewsFeed.Image = null;
+            lNewsFeed.BackColor = Color.FromArgb(31, 37, 49);
+            lNewsFeed.ForeColor = ModernText;
+            lNewsFeed.Font = new Font("Segoe UI", 10F);
+            lNewsFeed.Padding = new Padding(12);
+            lNewsFeed.TextAlign = ContentAlignment.TopLeft;
+
+            btnPlay.Image = null;
+            btnSettings.Image = null;
+            btnWebsite.Image = null;
+            StyleCommandLabel(btnSettings, Color.FromArgb(45, 52, 66), ModernText, 9F);
+            StyleCommandLabel(btnWebsite, Color.FromArgb(45, 52, 66), ModernText, 9F);
+            StyleCommandLabel(lSettingsBack, Color.FromArgb(45, 52, 66), ModernText, 11F);
+            StyleCommandLabel(lDownloadLauncherUpdate, Color.Transparent, Color.FromArgb(250, 210, 90), 10F);
+
+            pPatchSteps.BackColor = Color.Transparent;
+            foreach (var rb in pPatchSteps.Controls.OfType<RadioButton>())
+            {
+                rb.BackColor = Color.Transparent;
+                rb.ForeColor = ModernText;
+                rb.Font = new Font("Segoe UI", 9F);
+                rb.UseVisualStyleBackColor = false;
+            }
+
+            pgbBackTotal.Image = null;
+            pgbBackTotal.BackColor = Color.FromArgb(42, 48, 61);
+            pgbBackTotal.SizeMode = PictureBoxSizeMode.Normal;
+            pgbFrontTotal.Image = null;
+            pgbFrontTotal.BackColor = ModernAccent;
+
+            lAppVersion.ForeColor = ModernMutedText;
+            lLoadedConfig.ForeColor = ModernAccent;
+            lLoadedConfig.Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
+            lDownloadLauncherUpdate.ForeColor = Color.FromArgb(250, 210, 90);
+
+            StyleContextMenu(cmsAAEmuButton);
+            StyleContextMenu(cmsGitHub);
+            StyleContextMenu(cmsLauncherLanguage);
+            StyleContextMenu(cmsLocaleLanguage);
+            StyleContextMenu(cmsDiscord);
+            StyleContextMenu(cmsAuthType);
+
+            ApplyModernPlayButton(serverCheckStatus, false);
+        }
+
+        private void StyleTextBox(TextBox textBox)
+        {
+            textBox.BackColor = Color.FromArgb(22, 27, 36);
+            textBox.BorderStyle = BorderStyle.FixedSingle;
+            textBox.ForeColor = ModernText;
+            textBox.Font = new Font("Segoe UI", 12.5F);
+        }
+
+        private void StyleModernLabel(Label label, Color foreColor, float size, FontStyle style = FontStyle.Regular)
+        {
+            label.BackColor = Color.Transparent;
+            label.ForeColor = foreColor;
+            label.Font = new Font("Segoe UI", size, style, GraphicsUnit.Point, 0);
+        }
+
+        private void StyleCommandLabel(Label label, Color backColor, Color foreColor, float size)
+        {
+            label.Image = null;
+            label.BackColor = backColor;
+            label.ForeColor = foreColor;
+            label.Font = new Font("Segoe UI Semibold", size, FontStyle.Bold, GraphicsUnit.Point, 0);
+            label.TextAlign = ContentAlignment.MiddleCenter;
+        }
+
+        private void StyleContextMenu(ContextMenuStrip menu)
+        {
+            menu.BackColor = Color.FromArgb(28, 33, 43);
+            menu.ForeColor = ModernText;
+            menu.RenderMode = ToolStripRenderMode.System;
+        }
+
+        private void LauncherForm_Paint(object sender, PaintEventArgs e)
+        {
+            using (var backBrush = new LinearGradientBrush(ClientRectangle, Color.FromArgb(10, 13, 19), Color.FromArgb(23, 29, 39), 45F))
+                e.Graphics.FillRectangle(backBrush, ClientRectangle);
+
+            using (var accentBrush = new SolidBrush(Color.FromArgb(150, ModernAccent)))
+                e.Graphics.FillRectangle(accentBrush, new Rectangle(36, 95, 250, 3));
+        }
+
+        private void ModernPanel_Paint(object sender, PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using (var mainBrush = new SolidBrush(ModernPanel))
+                e.Graphics.FillRectangle(mainBrush, new Rectangle(16, 110, 640, 340));
+            using (var sideBrush = new SolidBrush(ModernPanelAlt))
+                e.Graphics.FillRectangle(sideBrush, new Rectangle(672, 78, 244, 374));
+            using (var lineBrush = new SolidBrush(Color.FromArgb(70, ModernAccent)))
+                e.Graphics.FillRectangle(lineBrush, new Rectangle(16, 110, 640, 2));
+            using (var borderPen = new Pen(Color.FromArgb(62, 72, 88)))
+            {
+                e.Graphics.DrawRectangle(borderPen, new Rectangle(16, 110, 640, 340));
+                e.Graphics.DrawRectangle(borderPen, new Rectangle(672, 78, 244, 374));
+            }
+        }
+
+        private void ApplyModernPlayButton(serverCheck serverState, bool isMouseOver)
+        {
+            var buttonColor = ModernAccent;
+            if (serverState == serverCheck.Offline || serverState == serverCheck.Updating)
+                buttonColor = ModernDanger;
+            else if (serverState == serverCheck.Unknown)
+                buttonColor = Color.FromArgb(86, 117, 226);
+            else if (isMouseOver)
+                buttonColor = ModernAccentHot;
+
+            StyleCommandLabel(btnPlay, buttonColor, Color.FromArgb(8, 12, 16), 24F);
+            btnPlay.Image = null;
+            btnPlay.FlatStyle = FlatStyle.Flat;
         }
 
         private void InitDefaultLanguage()
@@ -712,38 +912,41 @@ namespace AAEmu.Launcher
             // Gray out this setting if no update url is set
             if ((Setting.ServerGameUpdateURL != null) && (Setting.ServerGameUpdateURL != ""))
             {
-                lAllowUpdates.ForeColor = Color.White;
-                cbAllowUpdates.ForeColor = Color.White;
+                lAllowUpdates.ForeColor = ModernText;
+                cbAllowUpdates.ForeColor = ModernAccent;
                 cbAllowUpdates.Cursor = Cursors.Hand;
             }
             else
             {
-                lAllowUpdates.ForeColor = Color.Gray;
-                cbAllowUpdates.ForeColor = Color.Gray;
+                lAllowUpdates.ForeColor = ModernMutedText;
+                cbAllowUpdates.ForeColor = ModernMutedText;
                 cbAllowUpdates.Cursor = Cursors.No;
             }
 
-            // If we don't change this, transparancy effects that aren't on the panels will show wrong because of gray background
             switch (panelID)
             {
                 case ShowPanelType.Login:
-                    BackgroundImage = Properties.Resources.bg_login;
-                    panelLoginAndPatch.BackgroundImage = Properties.Resources.bg_login;
+                    BackgroundImage = null;
+                    panelLoginAndPatch.BackgroundImage = null;
                     break;
                 case ShowPanelType.Settings:
-                    BackgroundImage = Properties.Resources.bg_setup;
+                    BackgroundImage = null;
+                    panelSettings.BackgroundImage = null;
                     break;
                 case ShowPanelType.UpdatePatch:
-                    BackgroundImage = Properties.Resources.bg_patch;
-                    panelLoginAndPatch.BackgroundImage = Properties.Resources.bg_patch;
+                    BackgroundImage = null;
+                    panelLoginAndPatch.BackgroundImage = null;
                     break;
                 default:
-                    BackgroundImage = Properties.Resources.bg;
+                    BackgroundImage = null;
                     break;
             }
 
+            lBrandTitle.BringToFront();
+            lBrandSubtitle.BringToFront();
 
             currentPanel = panelID;
+            Invalidate(true);
         }
 
         private void ApplyLanguageToLauncher()
@@ -1759,7 +1962,7 @@ namespace AAEmu.Launcher
                 Setting.ClientLoginType = AAAutoDetectClient.GuessLauncher(Setting.PathToGame);
                 UpdateGameClientTypeLabel();
                 if (oldType != Setting.ClientLoginType)
-                    lGameClientType.ForeColor = Color.Yellow;
+                    lGameClientType.ForeColor = Color.FromArgb(250, 210, 90);
             }
             Application.UseWaitCursor = false;
         }
@@ -1866,9 +2069,9 @@ namespace AAEmu.Launcher
                 {
                     lGameClientType.Text = l.DisplayName;
                     return;
-                }
+            }
             lGameClientType.Text = "???: " + Setting.ClientLoginType;
-            lGameClientType.ForeColor = Color.White;
+            lGameClientType.ForeColor = ModernAccent;
         }
 
         private void lGameClientType_Click(object sender, EventArgs e)
@@ -2170,24 +2373,19 @@ namespace AAEmu.Launcher
                 switch (serverState)
                 {
                     case serverCheck.Offline: // offline
-                        btnPlay.Image = Properties.Resources.btn_red;
                         btnPlay.Text = L.Offline;
                         break;
                     case serverCheck.Online: // Play
-                        btnPlay.Image = Properties.Resources.btn_green_a;
                         btnPlay.Text = L.Play;
                         break;
                     case serverCheck.Update: // Update
-                        btnPlay.Image = Properties.Resources.btn_green;
                         btnPlay.Text = L.Update;
                         break;
                     case serverCheck.Updating: // Updating
-                        btnPlay.Image = Properties.Resources.btn_red;
                         btnPlay.Text = L.Updating;
                         break;
                     case serverCheck.Unknown: // Play
                     default:
-                        btnPlay.Image = Properties.Resources.btn_green;
                         btnPlay.Text = L.Play;
                         break;
                 }
@@ -2197,24 +2395,19 @@ namespace AAEmu.Launcher
                 switch (serverState)
                 {
                     case serverCheck.Offline: // offline
-                        btnPlay.Image = Properties.Resources.btn_red;
                         btnPlay.Text = L.Offline;
                         break;
                     case serverCheck.Online:
-                        btnPlay.Image = Properties.Resources.btn_green;
                         btnPlay.Text = L.Play;
                         break;
                     case serverCheck.Update: // Update
-                        btnPlay.Image = Properties.Resources.btn_green_d;
                         btnPlay.Text = L.Update;
                         break;
                     case serverCheck.Updating: // Updating
-                        btnPlay.Image = Properties.Resources.btn_red;
                         btnPlay.Text = L.Updating;
                         break;
                     case serverCheck.Unknown:
                     default:
-                        btnPlay.Image = Properties.Resources.btn_green_d;
                         btnPlay.Text = L.Play;
                         break;
                 }
@@ -2230,6 +2423,7 @@ namespace AAEmu.Launcher
 
             }
 
+            ApplyModernPlayButton(serverState, isMouseOver);
         }
 
         private async void CheckForLauncherUpdates()
