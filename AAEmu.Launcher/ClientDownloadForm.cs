@@ -85,9 +85,7 @@ namespace AAEmu.Launcher
             ClientDownloadManager.CleanupDownloadedParts(downloadFolder);
             try { Directory.Delete(downloadFolder); } catch { /* best effort */ }
 
-            var exe = Path.Combine(DestinationGameFolder, "Bin32", "archeage.exe");
-            if (File.Exists(exe))
-                DetectedExePath = exe;
+            DetectedExePath = ClientDownloadManager.FindGameExecutable(DestinationGameFolder);
         }
 
         private void Worker_ProgressChanged(object sender, ProgressChangedEventArgs e)

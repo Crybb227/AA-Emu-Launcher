@@ -6,7 +6,8 @@ using AAEmu.Launcher.Basic;
 
 namespace AAEmu.Launcher.Trion12
 {
-    [AALauncher("trino_1_2","Trion 1.2","1.2", "", "20140708")]
+    // Cutoff moved back one day to correctly include the widely-used r208022 test client (world.xml dated 2014-07-07)
+    [AALauncher("trino_1_2","Trion 1.2","1.2", "", "20140707")]
     public class Trion_1_2_Launcher: AAEmuLauncherBase
     {
 

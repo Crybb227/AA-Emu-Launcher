@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -118,6 +119,9 @@ namespace AAEmu.Launcher.Basic
             return null;
         }
 
+        // Archives seen inside the extracted client that also need unpacking ("double packed")
+        private static readonly string[] NestedArchiveExtensions = { ".zip", ".7z", ".rar" };
+
         public static void ExtractClient(string downloadFolder, string destinationFolder, IProgress<ClientDownloadProgress> progress = null)
         {
             var sevenZip = Find7ZipExecutable();
@@ -131,8 +135,30 @@ namespace AAEmu.Launcher.Basic
             Directory.CreateDirectory(destinationFolder);
 
             progress?.Report(new ClientDownloadProgress { Stage = "Extracting", CurrentFile = MainArchiveFileName });
+            RunSevenZipExtract(sevenZip, mainArchive, destinationFolder);
 
-            var psi = new ProcessStartInfo(sevenZip, $"x \"{mainArchive}\" -o\"{destinationFolder}\" -y -aoa")
+            // The client is "double packed": extracting the main archive can leave one or more
+            // nested archives behind that need extracting in turn before the game files show up.
+            const int maxPasses = 5;
+            for (var pass = 0; pass < maxPasses; pass++)
+            {
+                var nestedArchives = FindNestedArchives(destinationFolder);
+                if (nestedArchives.Count == 0)
+                    break;
+
+                foreach (var archivePath in nestedArchives)
+                {
+                    progress?.Report(new ClientDownloadProgress { Stage = "Extracting", CurrentFile = Path.GetFileName(archivePath) });
+                    var extractInto = Path.GetDirectoryName(archivePath);
+                    RunSevenZipExtract(sevenZip, archivePath, extractInto);
+                    try { File.Delete(archivePath); } catch { /* best effort */ }
+                }
+            }
+        }
+
+        private static void RunSevenZipExtract(string sevenZipExe, string archivePath, string destinationFolder)
+        {
+            var psi = new ProcessStartInfo(sevenZipExe, $"x \"{archivePath}\" -o\"{destinationFolder}\" -y -aoa")
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
@@ -142,8 +168,44 @@ namespace AAEmu.Launcher.Basic
             {
                 process.WaitForExit();
                 if (process.ExitCode != 0)
-                    throw new InvalidOperationException($"7-Zip extraction failed with exit code {process.ExitCode}.");
+                    throw new InvalidOperationException($"7-Zip extraction of '{Path.GetFileName(archivePath)}' failed with exit code {process.ExitCode}.");
             }
+        }
+
+        private static List<string> FindNestedArchives(string destinationFolder)
+        {
+            var found = new List<string>();
+            foreach (var extension in NestedArchiveExtensions)
+            {
+                try
+                {
+                    found.AddRange(Directory.EnumerateFiles(destinationFolder, "*" + extension, SearchOption.AllDirectories));
+                }
+                catch
+                {
+                    // Ignore inaccessible paths
+                }
+            }
+            return found;
+        }
+
+        /// <summary>Recursively searches the extracted client folder for the game executable.</summary>
+        public static string FindGameExecutable(string destinationFolder)
+        {
+            foreach (var exeName in new[] { "archeage.exe", "archeworld.exe" })
+            {
+                try
+                {
+                    var match = Directory.EnumerateFiles(destinationFolder, exeName, SearchOption.AllDirectories).FirstOrDefault();
+                    if (match != null)
+                        return match;
+                }
+                catch
+                {
+                    // Ignore inaccessible paths
+                }
+            }
+            return null;
         }
 
         public static void CleanupDownloadedParts(string downloadFolder)

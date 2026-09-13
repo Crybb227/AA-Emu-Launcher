@@ -573,7 +573,7 @@ namespace AAEmu.Launcher
             foreach (var label in new[] { lSaveUser, lUpdateLocale, lHideSplash, lSkipIntro, lAllowUpdates })
                 StyleModernLabel(label, ModernText, 9F);
             foreach (var label in new[] { cbSaveUser, cbUpdateLocale, cbHideSplash, cbSkipIntro, cbAllowUpdates })
-                StyleModernLabel(label, ModernAccent, 13F, FontStyle.Bold);
+                StyleCheckBoxLabel(label, ModernAccent, 13F);
 
             lNewsFeed.Image = null;
             lNewsFeed.BackColor = Color.FromArgb(31, 37, 49);
@@ -633,6 +633,16 @@ namespace AAEmu.Launcher
             label.BackColor = Color.Transparent;
             label.ForeColor = foreColor;
             label.Font = new Font("Segoe UI", size, style, GraphicsUnit.Point, 0);
+        }
+
+        // Gives the settings checkboxes a visible box outline, since a bare checkmark glyph is easy to miss
+        private void StyleCheckBoxLabel(Label label, Color foreColor, float size)
+        {
+            label.BackColor = Color.FromArgb(22, 27, 36);
+            label.ForeColor = foreColor;
+            label.Font = new Font("Segoe UI", size, FontStyle.Bold, GraphicsUnit.Point, 0);
+            label.BorderStyle = BorderStyle.FixedSingle;
+            label.TextAlign = ContentAlignment.MiddleCenter;
         }
 
         private void StyleCommandLabel(Label label, Color backColor, Color foreColor, float size)
@@ -2025,7 +2035,11 @@ namespace AAEmu.Launcher
                     {
                         Setting.PathToGame = dlg.DetectedExePath;
                         lGamePath.Text = Setting.PathToGame;
-                        GuessAndUpdateClientType();
+                        // The client from this Google Drive package is always the same known AAEmu test client
+                        // (r208022, ArcheAge 1.2 protocol) - the world.xml date heuristic in GuessLauncher() is
+                        // unreliable for repacked test clients, so set it directly instead of guessing.
+                        Setting.ClientLoginType = stringTrino_1_2;
+                        UpdateGameClientTypeLabel();
                         MessageBox.Show(this, "Game client downloaded and installed successfully.", "Download Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                     else if (result == DialogResult.Abort)
