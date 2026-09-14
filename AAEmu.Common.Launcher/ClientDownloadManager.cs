@@ -50,6 +50,7 @@ namespace AAEmu.Launcher.Basic
 
         private const string MainArchiveFileName = "aaemu client.zip";
         private const string MegaCmdDownloadUrl = "https://mega.io/cmd";
+        public const string AA30ArchiveFileName = "AA 3.0.3 - Trion - r318414 - 2016-12-08.7z";
         public const string AA35ArchiveFileName = "AA 3.5.0.3 - Trion - r342464 - 2017-06-08.7z";
 
         public static async Task DownloadAllPartsAsync(string downloadFolder, IProgress<ClientDownloadProgress> progress, CancellationToken cancellationToken = default)
@@ -164,6 +165,61 @@ namespace AAEmu.Launcher.Basic
         }
 
         public static string MegaCmdDownloadPage => MegaCmdDownloadUrl;
+
+        public static async Task DownloadGoogleDriveArchiveAsync(string driveLinkOrFileId, string downloadFolder, string archiveFileName, IProgress<ClientDownloadProgress> progress, CancellationToken cancellationToken = default)
+        {
+            var fileId = ExtractGoogleDriveFileId(driveLinkOrFileId);
+            if (string.IsNullOrWhiteSpace(fileId))
+                throw new InvalidOperationException("The Google Drive download link is not valid.");
+
+            Directory.CreateDirectory(downloadFolder);
+            var destinationPath = Path.Combine(downloadFolder, archiveFileName);
+            var fileProgress = new Progress<(long downloaded, long total)>(p =>
+            {
+                progress?.Report(new ClientDownloadProgress
+                {
+                    Stage = "Downloading",
+                    CurrentFile = archiveFileName,
+                    CurrentFileIndex = 1,
+                    TotalFiles = 1,
+                    BytesDownloaded = p.downloaded,
+                    BytesTotal = p.total
+                });
+            });
+
+            await GoogleDriveDownloader.DownloadFileAsync(fileId, destinationPath, fileProgress, cancellationToken);
+        }
+
+        private static string ExtractGoogleDriveFileId(string driveLinkOrFileId)
+        {
+            if (string.IsNullOrWhiteSpace(driveLinkOrFileId))
+                return string.Empty;
+
+            var value = driveLinkOrFileId.Trim();
+            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+                return value;
+
+            var marker = "/file/d/";
+            var markerIndex = uri.AbsolutePath.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (markerIndex >= 0)
+            {
+                var start = markerIndex + marker.Length;
+                var end = uri.AbsolutePath.IndexOf('/', start);
+                return end >= 0
+                    ? uri.AbsolutePath.Substring(start, end - start)
+                    : uri.AbsolutePath.Substring(start);
+            }
+
+            var query = uri.Query.TrimStart('?').Split('&');
+            foreach (var part in query)
+            {
+                var pair = part.Split(new[] { '=' }, 2);
+                if (pair.Length == 2 && string.Equals(pair[0], "id", StringComparison.OrdinalIgnoreCase))
+                    return Uri.UnescapeDataString(pair[1]);
+            }
+
+            return string.Empty;
+        }
 
         public static async Task DownloadMegaLinkAsync(string megaLink, string downloadFolder, string expectedFileName, IProgress<ClientDownloadProgress> progress, CancellationToken cancellationToken = default)
         {

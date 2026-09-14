@@ -14,6 +14,7 @@ using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -45,6 +46,7 @@ namespace AAEmu.Launcher
         {
             public const string DefaultLauncherUpdateRepo = "Crybb227/AA-Emu-Launcher";
             public const string DefaultAAClientDownloadLocation = "https://github.com/Crybb227/AA-Emu-Client-AA";
+            public const string DefaultAA30ClientDownloadLocation = "https://drive.google.com/file/d/1KQE-OIgGaOSqr69MufLe8R6odaIK8nit/view";
             public const string DefaultAA35ClientDownloadLocation = "https://mega.nz/folder/C3Q0WQjT#vRUethZLPiYSo2B4nE_etg/folder/T2QmRRZZ";
             public const string DefaultWoWClientDownloadLocation = "https://github.com/Crybb227/AA-Emu-Client-WoW";
             public const string LegacyAAClientGoogleDriveLocation = "https://drive.google.com/drive/folders/1_pIBVHIm1YFal-nteGaVuXjTv3Yrsv4Q";
@@ -69,6 +71,12 @@ namespace AAEmu.Launcher
 
             [JsonProperty("aaDownloadLocation", NullValueHandling = NullValueHandling.Ignore)]
             public string AADownloadLocation { get; set; } = DefaultAAClientDownloadLocation;
+
+            [JsonProperty("aa30Path", NullValueHandling = NullValueHandling.Ignore)]
+            public string AA30Path { get; set; } = string.Empty;
+
+            [JsonProperty("aa30DownloadLocation", NullValueHandling = NullValueHandling.Ignore)]
+            public string AA30DownloadLocation { get; set; } = DefaultAA30ClientDownloadLocation;
 
             [JsonProperty("aa35Path", NullValueHandling = NullValueHandling.Ignore)]
             public string AA35Path { get; set; } = string.Empty;
@@ -147,6 +155,8 @@ namespace AAEmu.Launcher
                 setting.PathToGame = "";
                 setting.AAPath = "";
                 setting.AADownloadLocation = DefaultAAClientDownloadLocation;
+                setting.AA30Path = "";
+                setting.AA30DownloadLocation = DefaultAA30ClientDownloadLocation;
                 setting.AA35Path = "";
                 setting.AA35DownloadLocation = DefaultAA35ClientDownloadLocation;
                 setting.WoWPath = "";
@@ -529,6 +539,7 @@ namespace AAEmu.Launcher
         private Label lBrandSubtitle;
         private Panel pGameHeader;
         private Label lGameArcheAge;
+        private Label lGameArcheAge30;
         private Label lGameArcheAge35;
         private Label lGameJasonWoW;
         private Label lGamePlaceholder;
@@ -702,16 +713,21 @@ namespace AAEmu.Launcher
             lLogo.TextAlign = ContentAlignment.MiddleLeft;
             lGameArcheAge = CreateGameIcon("AA", new Point(144, 64), true);
             lGameArcheAge.Click += (s, e) => SelectLauncherGame("aa");
-            lGameArcheAge35 = CreateGameIcon("AA 3.5", new Point(210, 64), false);
+            lGameArcheAge30 = CreateGameIcon("AA 3.0", new Point(210, 64), false);
+            lGameArcheAge30.Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            lGameArcheAge30.Size = new Size(68, 44);
+            lGameArcheAge30.Click += (s, e) => SelectLauncherGame("aa30");
+            lGameArcheAge35 = CreateGameIcon("AA 3.5", new Point(288, 64), false);
             lGameArcheAge35.Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold, GraphicsUnit.Point, 0);
             lGameArcheAge35.Size = new Size(68, 44);
             lGameArcheAge35.Click += (s, e) => SelectLauncherGame("aa35");
-            lGameJasonWoW = CreateGameIcon("JW", new Point(288, 64), false);
+            lGameJasonWoW = CreateGameIcon("JW", new Point(366, 64), false);
             lGameJasonWoW.Click += (s, e) => SelectLauncherGame("jw");
-            lGamePlaceholder = CreateGameIcon("+", new Point(354, 64), false);
+            lGamePlaceholder = CreateGameIcon("+", new Point(432, 64), false);
 
             pGameHeader.Controls.Add(lLogo);
             pGameHeader.Controls.Add(lGameArcheAge);
+            pGameHeader.Controls.Add(lGameArcheAge30);
             pGameHeader.Controls.Add(lGameArcheAge35);
             pGameHeader.Controls.Add(lGameJasonWoW);
             pGameHeader.Controls.Add(lGamePlaceholder);
@@ -782,15 +798,19 @@ namespace AAEmu.Launcher
             SaveSelectedGameFields();
             selectedGameId = gameId;
             var isAa = selectedGameId == "aa";
+            var isAa30 = selectedGameId == "aa30";
             var isAa35 = selectedGameId == "aa35";
 
             SetGameIconSelected(lGameArcheAge, isAa);
+            SetGameIconSelected(lGameArcheAge30, isAa30);
             SetGameIconSelected(lGameArcheAge35, isAa35);
             SetGameIconSelected(lGameJasonWoW, selectedGameId == "jw");
 
             lHeroTitle.Text = selectedGameId == "jw" ? "JASONWOW" : "ARCHEAGE";
-            lHeroNewsTitle.Text = isAa35 ? "AA Trion 3.5" : selectedGameId == "jw" ? "JasonWoW" : "News & Updates";
-            lHeroNewsBody.Text = isAa35
+            lHeroNewsTitle.Text = isAa30 ? "AA Trion 3.0" : isAa35 ? "AA Trion 3.5" : selectedGameId == "jw" ? "JasonWoW" : "News & Updates";
+            lHeroNewsBody.Text = isAa30
+                ? "AA 3.0.3 - Trion - r318414 - 2016-12-08 is selected."
+                : isAa35
                 ? "AA 3.5.0.3 - Trion - r342464 - 2017-06-08 is selected."
                 : isAa
                     ? "Install, patch, and launch private server clients from one place."
@@ -802,7 +822,7 @@ namespace AAEmu.Launcher
             Invalidate(true);
         }
 
-        private bool IsArcheAgeSelected => selectedGameId == "aa" || selectedGameId == "aa35";
+        private bool IsArcheAgeSelected => selectedGameId == "aa" || selectedGameId == "aa30" || selectedGameId == "aa35";
 
         private string SelectedGameDisplayName
         {
@@ -810,6 +830,8 @@ namespace AAEmu.Launcher
             {
                 if (selectedGameId == "jw")
                     return "WoW";
+                if (selectedGameId == "aa30")
+                    return "AA 3.0";
                 if (selectedGameId == "aa35")
                     return "AA 3.5";
                 return "AA";
@@ -820,6 +842,8 @@ namespace AAEmu.Launcher
         {
             if (selectedGameId == "jw")
                 return Setting.WoWPath;
+            if (selectedGameId == "aa30")
+                return Setting.AA30Path;
             if (selectedGameId == "aa35")
                 return Setting.AA35Path;
             return GetAAPath();
@@ -829,6 +853,8 @@ namespace AAEmu.Launcher
         {
             if (selectedGameId == "jw")
                 return GetWoWDownloadLocation();
+            if (selectedGameId == "aa30")
+                return GetAA30DownloadLocation();
             if (selectedGameId == "aa35")
                 return GetAA35DownloadLocation();
             return GetAADownloadLocation();
@@ -846,6 +872,13 @@ namespace AAEmu.Launcher
             if (!string.IsNullOrWhiteSpace(Setting.ServerGameUpdateURL))
                 return Setting.ServerGameUpdateURL;
             return LauncherFileSettings.DefaultAAClientDownloadLocation;
+        }
+
+        private string GetAA30DownloadLocation()
+        {
+            if (!string.IsNullOrWhiteSpace(Setting.AA30DownloadLocation))
+                return Setting.AA30DownloadLocation;
+            return LauncherFileSettings.DefaultAA30ClientDownloadLocation;
         }
 
         private string GetAA35DownloadLocation()
@@ -876,11 +909,20 @@ namespace AAEmu.Launcher
                 uri.Host.EndsWith("mega.nz", StringComparison.OrdinalIgnoreCase);
         }
 
+        private bool IsGoogleDriveDownloadLocation(string downloadLocation)
+        {
+            return !string.IsNullOrWhiteSpace(downloadLocation) &&
+                Uri.TryCreate(downloadLocation, UriKind.Absolute, out var uri) &&
+                uri.Host.EndsWith("google.com", StringComparison.OrdinalIgnoreCase) &&
+                uri.Host.IndexOf("drive", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private bool IsManifestBasedDownloadLocation(string downloadLocation)
         {
             return !string.IsNullOrWhiteSpace(downloadLocation) &&
                 !IsLegacyAAClientGoogleDriveLocation(downloadLocation) &&
-                !IsMegaDownloadLocation(downloadLocation);
+                !IsMegaDownloadLocation(downloadLocation) &&
+                !IsGoogleDriveDownloadLocation(downloadLocation);
         }
 
         private void SetSelectedGamePath(string path)
@@ -888,6 +930,10 @@ namespace AAEmu.Launcher
             if (selectedGameId == "jw")
             {
                 Setting.WoWPath = path;
+            }
+            else if (selectedGameId == "aa30")
+            {
+                Setting.AA30Path = path;
             }
             else if (selectedGameId == "aa35")
             {
@@ -906,6 +952,10 @@ namespace AAEmu.Launcher
             {
                 Setting.WoWDownloadLocation = url;
             }
+            else if (selectedGameId == "aa30")
+            {
+                Setting.AA30DownloadLocation = url;
+            }
             else if (selectedGameId == "aa35")
             {
                 Setting.AA35DownloadLocation = url;
@@ -919,7 +969,13 @@ namespace AAEmu.Launcher
 
         private void ApplySelectedGameToLegacySettings()
         {
-            if (selectedGameId == "aa35")
+            if (selectedGameId == "aa30")
+            {
+                Setting.PathToGame = Setting.AA30Path;
+                Setting.ServerGameUpdateURL = GetAA30DownloadLocation();
+                Setting.ClientLoginType = stringTrino_3_5;
+            }
+            else if (selectedGameId == "aa35")
             {
                 Setting.PathToGame = Setting.AA35Path;
                 Setting.ServerGameUpdateURL = GetAA35DownloadLocation();
@@ -954,6 +1010,11 @@ namespace AAEmu.Launcher
             eDownloadLocation.Text = GetSelectedDownloadLocation();
             if (selectedGameId == "jw")
                 lGameClientType.Text = "JasonWoW";
+            else if (selectedGameId == "aa30")
+            {
+                Setting.ClientLoginType = stringTrino_3_5;
+                UpdateGameClientTypeLabel();
+            }
             else if (selectedGameId == "aa35")
             {
                 Setting.ClientLoginType = stringTrino_3_5;
@@ -1220,11 +1281,13 @@ namespace AAEmu.Launcher
                 e.Graphics.FillRectangle(cardBrush, new Rectangle(880, 190, 340, 286));
             using (var headerLine = new SolidBrush(Color.FromArgb(54, 139, 235)))
             {
-                var indicator = selectedGameId == "aa35"
+                var indicator = selectedGameId == "aa30"
                     ? new Rectangle(210, 119, 68, 3)
-                    : selectedGameId == "jw"
-                        ? new Rectangle(288, 119, 56, 3)
-                        : new Rectangle(144, 119, 56, 3);
+                    : selectedGameId == "aa35"
+                        ? new Rectangle(288, 119, 68, 3)
+                        : selectedGameId == "jw"
+                            ? new Rectangle(366, 119, 56, 3)
+                            : new Rectangle(144, 119, 56, 3);
                 e.Graphics.FillRectangle(headerLine, indicator);
             }
         }
@@ -1900,6 +1963,8 @@ namespace AAEmu.Launcher
                 Setting.AADownloadLocation = string.IsNullOrWhiteSpace(Setting.ServerGameUpdateURL)
                     ? LauncherFileSettings.DefaultAAClientDownloadLocation
                     : Setting.ServerGameUpdateURL;
+            if (string.IsNullOrWhiteSpace(Setting.AA30DownloadLocation))
+                Setting.AA30DownloadLocation = LauncherFileSettings.DefaultAA30ClientDownloadLocation;
             if (string.IsNullOrWhiteSpace(Setting.AA35DownloadLocation))
                 Setting.AA35DownloadLocation = LauncherFileSettings.DefaultAA35ClientDownloadLocation;
             if (string.IsNullOrWhiteSpace(Setting.WoWDownloadLocation))
@@ -2053,6 +2118,8 @@ namespace AAEmu.Launcher
 
         private void UpdatePanelLabels()
         {
+            if (string.IsNullOrWhiteSpace(Setting.AA30DownloadLocation))
+                Setting.AA30DownloadLocation = LauncherFileSettings.DefaultAA30ClientDownloadLocation;
             if (string.IsNullOrWhiteSpace(Setting.AA35DownloadLocation))
                 Setting.AA35DownloadLocation = LauncherFileSettings.DefaultAA35ClientDownloadLocation;
             lLoadedConfig.Text = Setting.ConfigName;
@@ -2126,6 +2193,8 @@ namespace AAEmu.Launcher
                 Setting.AADownloadLocation = string.IsNullOrWhiteSpace(Setting.ServerGameUpdateURL)
                     ? LauncherFileSettings.DefaultAAClientDownloadLocation
                     : Setting.ServerGameUpdateURL;
+            if (string.IsNullOrWhiteSpace(Setting.AA30DownloadLocation))
+                Setting.AA30DownloadLocation = LauncherFileSettings.DefaultAA30ClientDownloadLocation;
             if (string.IsNullOrWhiteSpace(Setting.AA35DownloadLocation))
                 Setting.AA35DownloadLocation = LauncherFileSettings.DefaultAA35ClientDownloadLocation;
             if (string.IsNullOrWhiteSpace(Setting.WoWDownloadLocation))
@@ -2650,6 +2719,66 @@ namespace AAEmu.Launcher
             ApplySelectedGameToLegacySettings();
         }
 
+        private string ResolveGamePathSelection(string selectedPath)
+        {
+            if (string.IsNullOrWhiteSpace(selectedPath) ||
+                !string.Equals(Path.GetExtension(selectedPath), ".lnk", StringComparison.OrdinalIgnoreCase))
+            {
+                return selectedPath;
+            }
+
+            var shortcutTarget = ResolveShortcutTarget(selectedPath);
+            if (string.IsNullOrWhiteSpace(shortcutTarget))
+                throw new InvalidOperationException("The selected shortcut does not point to a game executable.");
+            if (!File.Exists(shortcutTarget))
+                throw new FileNotFoundException("The selected shortcut target was not found.", shortcutTarget);
+
+            return shortcutTarget;
+        }
+
+        private string ResolveShortcutTarget(string shortcutPath)
+        {
+            object shell = null;
+            object shortcut = null;
+            try
+            {
+                var shellType = Type.GetTypeFromProgID("WScript.Shell");
+                if (shellType == null)
+                    return string.Empty;
+
+                shell = Activator.CreateInstance(shellType);
+                shortcut = shellType.InvokeMember("CreateShortcut",
+                    System.Reflection.BindingFlags.InvokeMethod,
+                    null,
+                    shell,
+                    new object[] { shortcutPath });
+
+                return shortcut.GetType().InvokeMember("TargetPath",
+                    System.Reflection.BindingFlags.GetProperty,
+                    null,
+                    shortcut,
+                    null) as string ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+            finally
+            {
+                try
+                {
+                    if (shortcut != null && Marshal.IsComObject(shortcut))
+                        Marshal.FinalReleaseComObject(shortcut);
+                    if (shell != null && Marshal.IsComObject(shell))
+                        Marshal.FinalReleaseComObject(shell);
+                }
+                catch
+                {
+                    // Best effort COM cleanup.
+                }
+            }
+        }
+
         private void lGamePath_Click(object sender, EventArgs e)
         {
             if (serverCheckStatus == serverCheck.Updating)
@@ -2667,14 +2796,25 @@ namespace AAEmu.Launcher
                 openFileDialog.InitialDirectory = Path.Combine(DefaultGameWorkingDirectory,"bin32");
             }
             openFileDialog.Filter = selectedGameId == "jw"
-                ? "World of Warcraft|Wow*.exe|Executable|*.exe|All files (*.*)|*.*"
-                : "ArcheAge|arche*.exe|ArcheAge Game|" + archeAgeEXE + "|ArcheWorld Game|" + archeWorldEXE + "| Executeable |*.exe|All files (*.*)|*.*";
+                ? "World of Warcraft|Wow*.exe|Shortcuts|*.lnk|Executable|*.exe|All files (*.*)|*.*"
+                : "ArcheAge|arche*.exe|Shortcuts|*.lnk|ArcheAge Game|" + archeAgeEXE + "|ArcheWorld Game|" + archeWorldEXE + "| Executeable |*.exe|All files (*.*)|*.*";
             openFileDialog.FilterIndex = 1;
             openFileDialog.RestoreDirectory = true;
 
             while (openFileDialog.ShowDialog() == DialogResult.OK)
             {
-                if (IsInDefaultLocation(openFileDialog.FileName))
+                string selectedPath;
+                try
+                {
+                    selectedPath = ResolveGamePathSelection(openFileDialog.FileName);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, ex.Message, L.PathToGame, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    continue;
+                }
+
+                if (IsInDefaultLocation(selectedPath))
                 {
                     var res = MessageBox.Show(L.DefaultLocationWarning, L.PathToGame, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
                     if (res == DialogResult.No)
@@ -2683,7 +2823,7 @@ namespace AAEmu.Launcher
                         break;
                 }
                 //Get the path of specified file
-                SetSelectedGamePath(openFileDialog.FileName);
+                SetSelectedGamePath(selectedPath);
                 lGamePath.Text = GetSelectedGamePath();
                 GuessAndUpdateClientType();
                 break;
@@ -2732,6 +2872,30 @@ namespace AAEmu.Launcher
                             UpdateInstallStatus();
                             UpdatePlayButton(serverCheckStatus, false);
                             MessageBox.Show(this, "AA 3.5 downloaded and installed successfully.", "Download Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                    }
+                    return;
+                }
+
+                if (IsGoogleDriveDownloadLocation(downloadLocation))
+                {
+                    using (var dlg = new ClientDownloadForm(
+                        folderDialog.SelectedPath,
+                        expectedArchiveFileName: ClientDownloadManager.AA30ArchiveFileName,
+                        googleDriveDownloadLocation: downloadLocation))
+                    {
+                        var result = dlg.ShowDialog(this);
+                        if (result == DialogResult.OK && !string.IsNullOrEmpty(dlg.DetectedExePath))
+                        {
+                            SetSelectedGamePath(dlg.DetectedExePath);
+                            lGamePath.Text = GetSelectedGamePath();
+                            Setting.ClientLoginType = stringTrino_3_5;
+                            ApplySelectedGameToLegacySettings();
+                            UpdateGameClientTypeLabel();
+                            SaveSettings();
+                            UpdateInstallStatus();
+                            UpdatePlayButton(serverCheckStatus, false);
+                            MessageBox.Show(this, SelectedGameDisplayName + " downloaded and installed successfully.", "Download Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         }
                     }
                     return;

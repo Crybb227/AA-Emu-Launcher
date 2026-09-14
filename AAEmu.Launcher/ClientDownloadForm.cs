@@ -20,18 +20,24 @@ namespace AAEmu.Launcher
         private readonly BackgroundWorker worker;
         private CancellationTokenSource cts;
         private readonly string megaDownloadLocation;
+        private readonly string googleDriveDownloadLocation;
         private readonly string expectedArchiveFileName;
 
         public string DestinationGameFolder { get; }
         public string DetectedExePath { get; private set; }
 
-        public ClientDownloadForm(string destinationGameFolder, string megaDownloadLocation = null, string expectedArchiveFileName = null)
+        public ClientDownloadForm(string destinationGameFolder, string megaDownloadLocation = null, string expectedArchiveFileName = null, string googleDriveDownloadLocation = null)
         {
             DestinationGameFolder = destinationGameFolder;
             this.megaDownloadLocation = megaDownloadLocation;
+            this.googleDriveDownloadLocation = googleDriveDownloadLocation;
             this.expectedArchiveFileName = expectedArchiveFileName;
 
-            Text = string.IsNullOrWhiteSpace(megaDownloadLocation) ? "Downloading Game Client" : "Downloading MEGA Client";
+            Text = !string.IsNullOrWhiteSpace(megaDownloadLocation)
+                ? "Downloading MEGA Client"
+                : !string.IsNullOrWhiteSpace(googleDriveDownloadLocation)
+                    ? "Downloading Google Drive Client"
+                    : "Downloading Game Client";
             ClientSize = new Size(560, 160);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
@@ -80,7 +86,19 @@ namespace AAEmu.Launcher
 
             var progress = new Progress<ClientDownloadProgress>(p => worker.ReportProgress(0, p));
 
-            if (string.IsNullOrWhiteSpace(megaDownloadLocation))
+            if (!string.IsNullOrWhiteSpace(googleDriveDownloadLocation))
+            {
+                ClientDownloadManager.DownloadGoogleDriveArchiveAsync(googleDriveDownloadLocation, downloadFolder, expectedArchiveFileName, progress, token).GetAwaiter().GetResult();
+                token.ThrowIfCancellationRequested();
+
+                var archivePath = ClientDownloadManager.FindDownloadedArchive(downloadFolder, expectedArchiveFileName);
+                if (string.IsNullOrWhiteSpace(archivePath))
+                    throw new FileNotFoundException("Google Drive download completed, but the expected client archive was not found: " + expectedArchiveFileName);
+
+                ClientDownloadManager.ExtractArchive(archivePath, DestinationGameFolder, progress);
+                token.ThrowIfCancellationRequested();
+            }
+            else if (string.IsNullOrWhiteSpace(megaDownloadLocation))
             {
                 ClientDownloadManager.DownloadAllPartsAsync(downloadFolder, progress, token).GetAwaiter().GetResult();
                 token.ThrowIfCancellationRequested();
