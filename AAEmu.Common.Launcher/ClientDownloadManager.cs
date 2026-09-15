@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -51,7 +52,6 @@ namespace AAEmu.Launcher.Basic
         private const string MainArchiveFileName = "aaemu client.zip";
         private const string MegaCmdDownloadUrl = "https://mega.io/cmd";
         public const string AA30ArchiveFileName = "AA 3.0.3 - Trion - r318414 - 2016-12-08.7z";
-        public const string AA35ArchiveFileName = "AA 3.5.0.3 - Trion - r342464 - 2017-06-08.7z";
 
         public static async Task DownloadAllPartsAsync(string downloadFolder, IProgress<ClientDownloadProgress> progress, CancellationToken cancellationToken = default)
         {
@@ -219,6 +219,42 @@ namespace AAEmu.Launcher.Basic
             }
 
             return string.Empty;
+        }
+
+        public static async Task DownloadArchiveUrlAsync(string archiveUrl, string downloadFolder, string archiveFileName, IProgress<ClientDownloadProgress> progress, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(archiveUrl) || !Uri.TryCreate(archiveUrl, UriKind.Absolute, out var uri))
+                throw new InvalidOperationException("The archive download link is not valid.");
+
+            if (string.IsNullOrWhiteSpace(archiveFileName))
+                archiveFileName = Path.GetFileName(uri.LocalPath);
+
+            if (string.IsNullOrWhiteSpace(archiveFileName))
+                archiveFileName = "client.zip";
+
+            Directory.CreateDirectory(downloadFolder);
+            var destinationPath = Path.Combine(downloadFolder, archiveFileName);
+
+            using (var webClient = new WebClient())
+            using (cancellationToken.Register(webClient.CancelAsync))
+            {
+                webClient.DownloadProgressChanged += (s, e) =>
+                {
+                    progress?.Report(new ClientDownloadProgress
+                    {
+                        Stage = "Downloading",
+                        CurrentFile = archiveFileName,
+                        CurrentFileIndex = 1,
+                        TotalFiles = 1,
+                        BytesDownloaded = e.BytesReceived,
+                        BytesTotal = e.TotalBytesToReceive
+                    });
+                };
+
+                await webClient.DownloadFileTaskAsync(uri, destinationPath);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         public static async Task DownloadMegaLinkAsync(string megaLink, string downloadFolder, string expectedFileName, IProgress<ClientDownloadProgress> progress, CancellationToken cancellationToken = default)

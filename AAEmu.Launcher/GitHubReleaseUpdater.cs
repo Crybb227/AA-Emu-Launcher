@@ -73,6 +73,20 @@ namespace AAEmu.Launcher
     public static class GitHubReleaseUpdater
     {
         public const string ManifestAssetName = "manifest.json";
+        private static readonly string[] UserOwnedRelativeFiles =
+        {
+            "settings.aelcf",
+            "clientslist.json"
+        };
+
+        public static bool IsUserOwnedFile(string relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(relativePath))
+                return false;
+
+            var normalizedPath = relativePath.Replace('\\', '/');
+            return UserOwnedRelativeFiles.Any(p => string.Equals(p, normalizedPath, StringComparison.OrdinalIgnoreCase));
+        }
 
         /// <summary>Converts a manifest-relative file path into the flattened name used for release assets.</summary>
         public static string FlattenAssetName(string relativePath)
@@ -150,7 +164,7 @@ namespace AAEmu.Launcher
             var newPaths = new HashSet<string>(newManifest.Files.Select(f => f.Path), StringComparer.OrdinalIgnoreCase);
             return previousManifest.Files
                 .Select(f => f.Path)
-                .Where(p => !newPaths.Contains(p))
+                .Where(p => !IsUserOwnedFile(p) && !newPaths.Contains(p))
                 .ToList();
         }
 
@@ -160,6 +174,9 @@ namespace AAEmu.Launcher
             var changed = new List<UpdateManifestEntry>();
             foreach (var entry in manifest.Files)
             {
+                if (IsUserOwnedFile(entry.Path))
+                    continue;
+
                 var localPath = Path.Combine(appDirectory, entry.Path.Replace('/', Path.DirectorySeparatorChar));
                 if (!File.Exists(localPath))
                 {
@@ -235,6 +252,9 @@ namespace AAEmu.Launcher
             {
                 foreach (var relativePath in removedRelativeFiles)
                 {
+                    if (IsUserOwnedFile(relativePath))
+                        continue;
+
                     var fullPath = Path.Combine(appDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar));
                     sb.Append($"Remove-Item -Path '{fullPath}' -Force\r\n");
                 }
