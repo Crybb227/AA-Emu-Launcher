@@ -3287,83 +3287,83 @@ namespace AAEmu.Launcher
             bool hasSoundOptionSetting = false;
             bool hasDXSetting = false;
 
-            if (File.Exists(configFileName) == true)
-            {
-                lines = File.ReadAllLines(configFileName).ToList();
-
-                foreach (string line in lines)
-                {
-                    if ((enableUpdateLocale == true) && (line.IndexOf(localeField) >= 0))
-                    {
-                        // replace here
-                        if (updatedLocale == false)
-                        {
-                            newLines.Add(localeField + locale);
-                        }
-                        updatedLocale = true;
-                    }
-                    else
-                    if ((enableSkipIntro == true) && (line.IndexOf(movieField) >= 0))
-                    {
-                        // replace here
-                        if (updatedMovie == false)
-                        {
-                            newLines.Add(movieField + "1");
-                        }
-                        updatedMovie = true;
-                    }
-                    else
-                    {
-                        newLines.Add(line);
-                    }
-                    if (line.IndexOf(optionSoundField) >= 0)
-                    {
-                        hasSoundOptionSetting = true;
-                    }
-                    if (line.IndexOf(DXField) >= 0)
-                    {
-                        hasDXSetting = true;
-                    }
-
-                }
-            }
-
-            // Hack to make sure people can get past the server select on their first run
-            // Apperantly missing the option_sound in the system.cfg will make it so the charater
-            // select screen crashes
-            if (hasSoundOptionSetting == false)
-            {
-                newLines.Add(optionSoundField + "4");
-            }
-
-            // Default to DX11 (DX10 in settings)
-            // DX9 can sometimes give problems that makes you fail to load the character select screen
-            // We'll also change to windowed 1280x768, most things should be able to handle this
-            if (hasDXSetting == false)
-            {
-                newLines.Add(DXField + "\"DX10\"");
-                var x = (Screen.PrimaryScreen.WorkingArea.Width - 1280) / 2;
-                var y = (Screen.PrimaryScreen.WorkingArea.Height - 768) / 2;
-                newLines.Add("r_windowx = " + x.ToString());
-                newLines.Add("r_windowy = " + y.ToString());
-                newLines.Add("r_width = 1280");
-                newLines.Add("r_height = 768");
-                newLines.Add("r_fullscreen = 0");
-                newLines.Add("r_vsync = 0");
-            }
-
-            // Add our settings if needed
-            if ((enableSkipIntro == true) && (updatedMovie == false))
-            {
-                newLines.Add(movieField + "1");
-            }
-            if ((enableUpdateLocale == true) && (updatedLocale == false))
-            {
-                newLines.Add(localeField + locale);
-            }
-
             try
             {
+                if (File.Exists(configFileName) == true)
+                {
+                    lines = File.ReadAllLines(configFileName).ToList();
+
+                    foreach (string line in lines)
+                    {
+                        if ((enableUpdateLocale == true) && (line.IndexOf(localeField) >= 0))
+                        {
+                            // replace here
+                            if (updatedLocale == false)
+                            {
+                                newLines.Add(localeField + locale);
+                            }
+                            updatedLocale = true;
+                        }
+                        else
+                        if ((enableSkipIntro == true) && (line.IndexOf(movieField) >= 0))
+                        {
+                            // replace here
+                            if (updatedMovie == false)
+                            {
+                                newLines.Add(movieField + "1");
+                            }
+                            updatedMovie = true;
+                        }
+                        else
+                        {
+                            newLines.Add(line);
+                        }
+                        if (line.IndexOf(optionSoundField) >= 0)
+                        {
+                            hasSoundOptionSetting = true;
+                        }
+                        if (line.IndexOf(DXField) >= 0)
+                        {
+                            hasDXSetting = true;
+                        }
+
+                    }
+                }
+
+                // Hack to make sure people can get past the server select on their first run
+                // Apperantly missing the option_sound in the system.cfg will make it so the charater
+                // select screen crashes
+                if (hasSoundOptionSetting == false)
+                {
+                    newLines.Add(optionSoundField + "4");
+                }
+
+                // Default to DX11 (DX10 in settings)
+                // DX9 can sometimes give problems that makes you fail to load the character select screen
+                // We'll also change to windowed 1280x768, most things should be able to handle this
+                if (hasDXSetting == false)
+                {
+                    newLines.Add(DXField + "\"DX10\"");
+                    var x = (Screen.PrimaryScreen.WorkingArea.Width - 1280) / 2;
+                    var y = (Screen.PrimaryScreen.WorkingArea.Height - 768) / 2;
+                    newLines.Add("r_windowx = " + x.ToString());
+                    newLines.Add("r_windowy = " + y.ToString());
+                    newLines.Add("r_width = 1280");
+                    newLines.Add("r_height = 768");
+                    newLines.Add("r_fullscreen = 0");
+                    newLines.Add("r_vsync = 0");
+                }
+
+                // Add our settings if needed
+                if ((enableSkipIntro == true) && (updatedMovie == false))
+                {
+                    newLines.Add(movieField + "1");
+                }
+                if ((enableUpdateLocale == true) && (updatedLocale == false))
+                {
+                    newLines.Add(localeField + locale);
+                }
+
                 // Create the folder if needed
                 if (!Directory.Exists(Path.GetDirectoryName(configFileName)))
                     Directory.CreateDirectory(Path.GetDirectoryName(configFileName));
