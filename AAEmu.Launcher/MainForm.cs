@@ -82,6 +82,9 @@ namespace AAEmu.Launcher
             [JsonProperty("wowDownloadLocation", NullValueHandling = NullValueHandling.Ignore)]
             public string WoWDownloadLocation { get; set; } = DefaultWoWClientDownloadLocation;
 
+            [JsonProperty("wowAddOnsPath", NullValueHandling = NullValueHandling.Ignore)]
+            public string WoWAddOnsPath { get; set; } = string.Empty;
+
             [JsonProperty("serverIPAddress", NullValueHandling = NullValueHandling.Ignore)]
             public string ServerIpAddress { get; set; } = "127.0.0.1";
 
@@ -129,6 +132,12 @@ namespace AAEmu.Launcher
 
             [JsonProperty("autoLaunch", NullValueHandling = NullValueHandling.Ignore)]
             public bool AutoLaunch { get; set; } = false;
+
+            [JsonProperty("discordPresenceEnabled", NullValueHandling = NullValueHandling.Ignore)]
+            public bool DiscordPresenceEnabled { get; set; } = false;
+
+            [JsonProperty("discordPresenceStatusFilePath", NullValueHandling = NullValueHandling.Ignore)]
+            public string DiscordPresenceStatusFilePath { get; set; } = string.Empty;
 
 
             public LauncherFileSettings()
@@ -508,6 +517,10 @@ namespace AAEmu.Launcher
         AAEmuLauncherBase aaLauncher = null;
         private bool checkGameIsRunning = false;
 
+        private DiscordPresenceService discordPresence = null;
+        private Process jasonWoWProcess = null;
+        private const string DefaultDiscordPresenceStatusFilePath = "discord-presence/status.json";
+
         private AAPatchProgress aaPatcher = new AAPatchProgress();
         private AAPak pak = null;
         private AAPak PatchDownloadPak = null;
@@ -536,6 +549,7 @@ namespace AAEmu.Launcher
         private Label lGameJasonWoW;
         private Label lGamePlaceholder;
         private Label lInstallStatus;
+        private Label lAddons;
         private Label lClientUpdateAction;
         private Label lDownloadLocationLabel;
         private TextBox eDownloadLocation;
@@ -748,6 +762,21 @@ namespace AAEmu.Launcher
             };
             lClientUpdateAction.Click += LClientUpdateAction_Click;
 
+            lAddons = new Label
+            {
+                AutoSize = false,
+                BackColor = Color.FromArgb(45, 52, 66),
+                Cursor = Cursors.Hand,
+                ForeColor = ModernText,
+                Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold, GraphicsUnit.Point, 0),
+                Location = new Point(28, 468),
+                Size = new Size(242, 34),
+                Text = "Manage Addons",
+                TextAlign = ContentAlignment.MiddleCenter,
+                Visible = false
+            };
+            lAddons.Click += LAddons_Click;
+
             lDownloadLocationLabel = new Label
             {
                 AutoSize = false,
@@ -771,6 +800,7 @@ namespace AAEmu.Launcher
             lHeroNewsBody = CreateSurfaceLabel("Install, patch, and launch private server clients from one place.", new Point(900, 238), new Size(300, 128), 12F, ModernText, ContentAlignment.TopLeft);
             Controls.Add(lInstallStatus);
             Controls.Add(lClientUpdateAction);
+            Controls.Add(lAddons);
             panelSettings.Controls.Add(lDownloadLocationLabel);
             panelSettings.Controls.Add(eDownloadLocation);
             Controls.Add(lHeroTitle);
@@ -792,6 +822,7 @@ namespace AAEmu.Launcher
             SetGameIconSelected(lGameArcheAge, isAa);
             SetGameIconSelected(lGameArcheAge30, isAa30);
             SetGameIconSelected(lGameJasonWoW, selectedGameId == "jw");
+            lAddons.Visible = selectedGameId == "jw";
 
             lHeroTitle.Text = selectedGameId == "jw" ? "JASONWOW" : "ARCHEAGE";
             lHeroNewsTitle.Text = isAa30 ? "AA v3.0.3" : selectedGameId == "jw" ? "JasonWoW" : "AA v1.2";
@@ -1090,6 +1121,8 @@ namespace AAEmu.Launcher
             lClientUpdateAction.Size = new Size(242, 32);
             lInstallStatus.Location = new Point(28, 518);
             lInstallStatus.Size = new Size(242, 62);
+            lAddons.Location = new Point(28, 588);
+            lAddons.Size = new Size(242, 32);
             lHeroTitle.Location = new Point(28, 178);
             lHeroTitle.Size = new Size(242, 72);
             lHeroTitle.Font = new Font("Segoe UI Semibold", 20F, FontStyle.Bold, GraphicsUnit.Point, 0);
@@ -1573,8 +1606,10 @@ namespace AAEmu.Launcher
             btnMinimize.BringToFront();
             lInstallStatus.BringToFront();
             lClientUpdateAction.BringToFront();
+            lAddons.BringToFront();
             lClientUpdateAction.Visible = showHome;
             lInstallStatus.Visible = showHome;
+            lAddons.Visible = showHome && selectedGameId == "jw";
             UpdateInstallStatus();
 
             currentPanel = panelID;
@@ -2484,6 +2519,10 @@ namespace AAEmu.Launcher
         {
             CancelPatching = true;
             SaveSettings();
+
+            discordPresence?.Dispose();
+            discordPresence = null;
+
             try
             {
                 PatchDownloadPak?.ClosePak();
@@ -3065,16 +3104,48 @@ namespace AAEmu.Launcher
                 if (selectedGameId == "jw")
                     UpdateWoWRealmlist(exePath);
 
-                Process.Start(new ProcessStartInfo(exePath)
+                var startedProcess = Process.Start(new ProcessStartInfo(exePath)
                 {
                     WorkingDirectory = Path.GetDirectoryName(exePath),
                     UseShellExecute = true
                 });
                 WindowState = FormWindowState.Minimized;
+
+                if (selectedGameId == "jw")
+                    StartDiscordPresenceForGame(startedProcess);
             }
             catch (Exception ex)
             {
                 MessageBox.Show(this, ex.Message, "Launch Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void StartDiscordPresenceForGame(Process gameProcess)
+        {
+            if (!Setting.DiscordPresenceEnabled || gameProcess == null)
+                return;
+
+            jasonWoWProcess = gameProcess;
+
+            var statusFilePath = string.IsNullOrWhiteSpace(Setting.DiscordPresenceStatusFilePath)
+                ? DefaultDiscordPresenceStatusFilePath
+                : Setting.DiscordPresenceStatusFilePath;
+
+            discordPresence?.Stop();
+            discordPresence = new DiscordPresenceService(statusFilePath);
+            discordPresence.Start();
+        }
+
+        private void StopDiscordPresenceIfGameExited()
+        {
+            if (discordPresence == null || jasonWoWProcess == null)
+                return;
+
+            if (jasonWoWProcess.HasExited)
+            {
+                discordPresence.Stop();
+                discordPresence = null;
+                jasonWoWProcess = null;
             }
         }
 
@@ -3113,6 +3184,31 @@ namespace AAEmu.Launcher
                 throw new InvalidOperationException("Set a server address before launching WoW.");
 
             return serverAddress;
+        }
+
+        private string GetDefaultWoWAddOnsPath()
+        {
+            if (!string.IsNullOrWhiteSpace(Setting.WoWAddOnsPath))
+                return Setting.WoWAddOnsPath;
+
+            if (string.IsNullOrWhiteSpace(Setting.WoWPath) || !File.Exists(Setting.WoWPath))
+                return string.Empty;
+
+            var installRoot = Path.GetDirectoryName(Setting.WoWPath);
+            return string.IsNullOrWhiteSpace(installRoot) ? string.Empty : Path.Combine(installRoot, "Interface", "AddOns");
+        }
+
+        private void LAddons_Click(object sender, EventArgs e)
+        {
+            using (var addonForm = new WowAddonManagerForm(GetDefaultWoWAddOnsPath()))
+            {
+                addonForm.ShowDialog(this);
+                if (!string.IsNullOrWhiteSpace(addonForm.AddOnsPath) && addonForm.AddOnsPath != Setting.WoWAddOnsPath)
+                {
+                    Setting.WoWAddOnsPath = addonForm.AddOnsPath;
+                    SaveSettings();
+                }
+            }
         }
 
         private async void LClientUpdateAction_Click(object sender, EventArgs e)
@@ -3287,11 +3383,28 @@ namespace AAEmu.Launcher
             bool hasSoundOptionSetting = false;
             bool hasDXSetting = false;
 
+            // Cloud-synced Documents folders (e.g. OneDrive Files On-Demand) can briefly
+            // throw IOException while the cloud file provider hydrates the file.
+            // Retry a few times with a short delay before giving up.
+            const int maxAttempts = 3;
+            const int retryDelayMs = 500;
+
             try
             {
                 if (File.Exists(configFileName) == true)
                 {
-                    lines = File.ReadAllLines(configFileName).ToList();
+                    for (int attempt = 1; ; attempt++)
+                    {
+                        try
+                        {
+                            lines = File.ReadAllLines(configFileName).ToList();
+                            break;
+                        }
+                        catch (IOException) when (attempt < maxAttempts)
+                        {
+                            Thread.Sleep(retryDelayMs);
+                        }
+                    }
 
                     foreach (string line in lines)
                     {
@@ -3367,7 +3480,19 @@ namespace AAEmu.Launcher
                 // Create the folder if needed
                 if (!Directory.Exists(Path.GetDirectoryName(configFileName)))
                     Directory.CreateDirectory(Path.GetDirectoryName(configFileName));
-                File.WriteAllLines(configFileName, newLines);
+
+                for (int attempt = 1; ; attempt++)
+                {
+                    try
+                    {
+                        File.WriteAllLines(configFileName, newLines);
+                        break;
+                    }
+                    catch (IOException) when (attempt < maxAttempts)
+                    {
+                        Thread.Sleep(retryDelayMs);
+                    }
+                }
             }
             catch (Exception x)
             {
@@ -3611,6 +3736,8 @@ namespace AAEmu.Launcher
 
         private void timerGeneral_Tick(object sender, EventArgs e)
         {
+            StopDiscordPresenceIfGameExited();
+
             if ((aaLauncher != null) && (aaLauncher.RunningProcess != null) && (checkGameIsRunning == true))
             {
                 if (aaLauncher.RunningProcess.HasExited)
