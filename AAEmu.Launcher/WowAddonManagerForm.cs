@@ -17,12 +17,12 @@ namespace AAEmu.Launcher
     /// </summary>
     public class WowAddonManagerForm : Form
     {
-        private readonly Color ModernBack = Color.FromArgb(12, 15, 21);
-        private readonly Color ModernPanel = Color.FromArgb(29, 34, 45);
-        private readonly Color ModernAccent = Color.FromArgb(72, 198, 169);
-        private readonly Color ModernText = Color.FromArgb(235, 240, 246);
-        private readonly Color ModernMutedText = Color.FromArgb(145, 157, 172);
-        private readonly Color ModernDanger = Color.FromArgb(210, 74, 86);
+        private readonly Color ModernBack = WowTheme.Back;
+        private readonly Color ModernPanel = WowTheme.Panel;
+        private readonly Color ModernAccent = WowTheme.Accent;
+        private readonly Color ModernText = WowTheme.Text;
+        private readonly Color ModernMutedText = WowTheme.MutedText;
+        private readonly Color ModernDanger = WowTheme.Danger;
 
         private readonly TextBox eAddonsFolder;
         private readonly Button btnBrowseFolder;
@@ -193,8 +193,20 @@ namespace AAEmu.Launcher
             lvCatalog.DoubleClick += async (s, e) => await InstallSelectedFromCatalogAsync();
             lvCatalog.SelectedIndexChanged += (s, e) =>
             {
-                btnInstallFromCatalog.Enabled = lvCatalog.SelectedItems.Count > 0;
-                UpdatePreviewImage(pbCatalogPreview, lvCatalog.SelectedItems.Count > 0 ? ((CuratedAddon)lvCatalog.SelectedItems[0].Tag).ImageUrl : null);
+                var hasSelection = lvCatalog.SelectedItems.Count > 0;
+                btnInstallFromCatalog.Enabled = hasSelection;
+                if (hasSelection)
+                {
+                    var selected = (CuratedAddon)lvCatalog.SelectedItems[0].Tag;
+                    UpdatePreviewImage(pbCatalogPreview, selected.ImageUrl);
+                    var alreadyInstalled = (manifest?.Addons ?? new List<InstalledAddon>()).Any(a => string.Equals(a.Repo, selected.Repo, StringComparison.OrdinalIgnoreCase));
+                    btnInstallFromCatalog.Text = alreadyInstalled ? "Reinstall Selected" : "Install Selected";
+                }
+                else
+                {
+                    UpdatePreviewImage(pbCatalogPreview, null);
+                    btnInstallFromCatalog.Text = "Install Selected";
+                }
             };
 
             pbCatalogPreview = new PictureBox { Left = 500, Top = 42, Width = 218, Height = 164, BorderStyle = BorderStyle.FixedSingle, BackColor = ModernPanel, SizeMode = PictureBoxSizeMode.Zoom };
@@ -234,8 +246,20 @@ namespace AAEmu.Launcher
             lvExclusives.DoubleClick += async (s, e) => await InstallSelectedExclusiveAsync();
             lvExclusives.SelectedIndexChanged += (s, e) =>
             {
-                btnInstallExclusive.Enabled = lvExclusives.SelectedItems.Count > 0;
-                UpdatePreviewImage(pbExclusivesPreview, lvExclusives.SelectedItems.Count > 0 ? ((ExclusiveAddon)lvExclusives.SelectedItems[0].Tag).ImageUrl : null);
+                var hasSelection = lvExclusives.SelectedItems.Count > 0;
+                btnInstallExclusive.Enabled = hasSelection;
+                if (hasSelection)
+                {
+                    var selected = (ExclusiveAddon)lvExclusives.SelectedItems[0].Tag;
+                    UpdatePreviewImage(pbExclusivesPreview, selected.ImageUrl);
+                    var alreadyInstalled = (manifest?.Addons ?? new List<InstalledAddon>()).Any(a => a.Folders.Contains(selected.Folder, StringComparer.OrdinalIgnoreCase));
+                    btnInstallExclusive.Text = alreadyInstalled ? "Reinstall Selected" : "Install Selected";
+                }
+                else
+                {
+                    UpdatePreviewImage(pbExclusivesPreview, null);
+                    btnInstallExclusive.Text = "Install Selected";
+                }
             };
 
             pbExclusivesPreview = new PictureBox { Left = 500, Top = 42, Width = 218, Height = 164, BorderStyle = BorderStyle.FixedSingle, BackColor = ModernPanel, SizeMode = PictureBoxSizeMode.Zoom };
@@ -343,8 +367,10 @@ namespace AAEmu.Launcher
             if (exclusiveCatalog == null)
                 return;
 
+            var previouslySelectedFolder = lvExclusives.SelectedItems.Count > 0 ? ((ExclusiveAddon)lvExclusives.SelectedItems[0].Tag).Folder : null;
+
             var installedFolders = new HashSet<string>(
-                (manifest?.Addons ?? new List<InstalledAddon>()).Where(a => a.IsExclusive).Select(a => a.ExclusiveFolder),
+                (manifest?.Addons ?? new List<InstalledAddon>()).SelectMany(a => a.Folders),
                 StringComparer.OrdinalIgnoreCase);
 
             foreach (var addon in exclusiveCatalog.Addons.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase))
@@ -353,6 +379,9 @@ namespace AAEmu.Launcher
                 item.SubItems.Add(addon.Description);
                 item.SubItems.Add(installedFolders.Contains(addon.Folder) ? "Installed" : string.Empty);
                 lvExclusives.Items.Add(item);
+
+                if (string.Equals(addon.Folder, previouslySelectedFolder, StringComparison.OrdinalIgnoreCase))
+                    item.Selected = true;
             }
         }
 
@@ -363,6 +392,17 @@ namespace AAEmu.Launcher
 
             var addon = (CuratedAddon)lvCatalog.SelectedItems[0].Tag;
             await InstallAddonAsync(addon.Repo, addon.Name);
+        }
+
+        /// <summary>Recomputes the Browse tab's Install/Reinstall button text for whatever's currently selected, against the freshly-reloaded manifest.</summary>
+        private void RefreshCatalogSelectionButtonText()
+        {
+            if (lvCatalog.SelectedItems.Count == 0)
+                return;
+
+            var selected = (CuratedAddon)lvCatalog.SelectedItems[0].Tag;
+            var alreadyInstalled = (manifest?.Addons ?? new List<InstalledAddon>()).Any(a => string.Equals(a.Repo, selected.Repo, StringComparison.OrdinalIgnoreCase));
+            btnInstallFromCatalog.Text = alreadyInstalled ? "Reinstall Selected" : "Install Selected";
         }
 
         private async Task InstallSelectedExclusiveAsync()
@@ -387,8 +427,7 @@ namespace AAEmu.Launcher
                     var (folders, version) = await AddonManager.InstallExclusiveAddonAsync(client, addon, addOnsPath, CancellationToken.None);
 
                     manifest = AddonManager.LoadManifest(addOnsPath);
-                    manifest.Addons.RemoveAll(a => string.Equals(a.ExclusiveFolder, addon.Folder, StringComparison.OrdinalIgnoreCase));
-                    manifest.Addons.Add(new InstalledAddon
+                    AddonManager.ReplaceAddonForFolders(manifest, new InstalledAddon
                     {
                         Name = addon.Name,
                         Repo = addon.Repo,
@@ -431,8 +470,7 @@ namespace AAEmu.Launcher
                             var folders = await AddonManager.InstallFromDirectZipAsync(client, dep.DownloadUrl, addOnsPath, CancellationToken.None);
 
                             manifest = AddonManager.LoadManifest(addOnsPath);
-                            manifest.Addons.RemoveAll(a => string.Equals(a.Name, dep.Name, StringComparison.OrdinalIgnoreCase));
-                            manifest.Addons.Add(new InstalledAddon
+                            AddonManager.ReplaceAddonForFolders(manifest, new InstalledAddon
                             {
                                 Name = dep.Name,
                                 Repo = string.Empty,
@@ -617,8 +655,7 @@ namespace AAEmu.Launcher
                     var folders = await Task.Run(() => AddonManager.ExtractAddon(zipPath, addOnsPath));
 
                     manifest = AddonManager.LoadManifest(addOnsPath);
-                    manifest.Addons.RemoveAll(a => string.Equals(a.Repo, ownerRepo, StringComparison.OrdinalIgnoreCase));
-                    manifest.Addons.Add(new InstalledAddon
+                    AddonManager.ReplaceAddonForFolders(manifest, new InstalledAddon
                     {
                         Name = displayName ?? folders.FirstOrDefault() ?? ownerRepo,
                         Repo = ownerRepo,
@@ -628,6 +665,7 @@ namespace AAEmu.Launcher
                     AddonManager.SaveManifest(addOnsPath, manifest);
 
                     RefreshAddonList();
+                    RefreshCatalogSelectionButtonText();
                     lStatus.Text = $"Installed {displayName ?? ownerRepo} ({version}).";
                     return true;
                 }

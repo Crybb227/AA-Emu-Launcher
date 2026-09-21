@@ -126,6 +126,7 @@
     <Compile Include="AddonManager.cs" />
     <Compile Include="WowAddonManagerForm.cs" />
     <Compile Include="AddonDependencyPromptForm.cs" />
+    <Compile Include="WowTheme.cs" />
     <Compile Include="ClientDownloadForm.cs">
       <SubType>Form</SubType>
     </Compile>

@@ -387,7 +387,7 @@
             // 
             // eLogin
             // 
-            this.eLogin.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(60)))), ((int)(((byte)(45)))), ((int)(((byte)(65)))));
+            this.eLogin.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(20)))), ((int)(((byte)(13)))));
             this.eLogin.BorderStyle = System.Windows.Forms.BorderStyle.None;
             this.eLogin.Font = new System.Drawing.Font("Georgia", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.eLogin.ForeColor = System.Drawing.Color.White;
@@ -402,7 +402,7 @@
             // 
             // cbLoginList
             // 
-            this.cbLoginList.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(60)))), ((int)(((byte)(45)))), ((int)(((byte)(65)))));
+            this.cbLoginList.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(20)))), ((int)(((byte)(13)))));
             this.cbLoginList.DropDownHeight = 140;
             this.cbLoginList.DropDownWidth = 200;
             this.cbLoginList.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -420,7 +420,7 @@
             // 
             // ePassword
             // 
-            this.ePassword.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(60)))), ((int)(((byte)(45)))), ((int)(((byte)(65)))));
+            this.ePassword.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(20)))), ((int)(((byte)(13)))));
             this.ePassword.BorderStyle = System.Windows.Forms.BorderStyle.None;
             this.ePassword.Font = new System.Drawing.Font("Georgia", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.ePassword.ForeColor = System.Drawing.Color.White;
@@ -550,7 +550,7 @@
             // 
             // eServerIP
             // 
-            this.eServerIP.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(60)))), ((int)(((byte)(45)))), ((int)(((byte)(65)))));
+            this.eServerIP.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(20)))), ((int)(((byte)(13)))));
             this.eServerIP.BorderStyle = System.Windows.Forms.BorderStyle.None;
             this.eServerIP.Font = new System.Drawing.Font("Georgia", 15.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.eServerIP.ForeColor = System.Drawing.Color.White;
@@ -891,7 +891,7 @@
             this.cbAllowUpdates.BackColor = System.Drawing.Color.Transparent;
             this.cbAllowUpdates.Cursor = System.Windows.Forms.Cursors.Hand;
             this.cbAllowUpdates.Font = new System.Drawing.Font("Georgia", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.cbAllowUpdates.ForeColor = System.Drawing.Color.Gray;
+            this.cbAllowUpdates.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(170)))), ((int)(((byte)(150)))), ((int)(((byte)(115)))));
             this.cbAllowUpdates.Location = new System.Drawing.Point(450, 340);
             this.cbAllowUpdates.Name = "cbAllowUpdates";
             this.cbAllowUpdates.Size = new System.Drawing.Size(31, 24);
@@ -904,7 +904,7 @@
             // 
             this.lAllowUpdates.BackColor = System.Drawing.Color.Transparent;
             this.lAllowUpdates.Font = new System.Drawing.Font("Georgia", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lAllowUpdates.ForeColor = System.Drawing.Color.Gray;
+            this.lAllowUpdates.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(170)))), ((int)(((byte)(150)))), ((int)(((byte)(115)))));
             this.lAllowUpdates.Location = new System.Drawing.Point(300, 340);
             this.lAllowUpdates.Name = "lAllowUpdates";
             this.lAllowUpdates.Size = new System.Drawing.Size(145, 30);
@@ -1272,7 +1272,7 @@
             this.lDownloadLauncherUpdate.BackColor = System.Drawing.Color.Transparent;
             this.lDownloadLauncherUpdate.Cursor = System.Windows.Forms.Cursors.Hand;
             this.lDownloadLauncherUpdate.Font = new System.Drawing.Font("Georgia", 12F, System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lDownloadLauncherUpdate.ForeColor = System.Drawing.Color.Yellow;
+            this.lDownloadLauncherUpdate.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(209)))), ((int)(((byte)(0)))));
             this.lDownloadLauncherUpdate.Location = new System.Drawing.Point(223, 477);
             this.lDownloadLauncherUpdate.Name = "lDownloadLauncherUpdate";
             this.lDownloadLauncherUpdate.Size = new System.Drawing.Size(515, 21);
@@ -1377,7 +1377,7 @@
             // LauncherForm
             // 
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
-            this.BackColor = System.Drawing.Color.DimGray;
+            this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(15)))), ((int)(((byte)(12)))), ((int)(((byte)(8)))));
             this.BackgroundImageLayout = System.Windows.Forms.ImageLayout.None;
             this.ClientSize = new System.Drawing.Size(950, 510);
             this.Controls.Add(this.btnMinimize);

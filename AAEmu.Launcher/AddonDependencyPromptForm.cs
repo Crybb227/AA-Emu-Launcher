@@ -12,11 +12,11 @@ namespace AAEmu.Launcher
     /// </summary>
     public class AddonDependencyPromptForm : Form
     {
-        private readonly Color ModernBack = Color.FromArgb(12, 15, 21);
-        private readonly Color ModernPanel = Color.FromArgb(29, 34, 45);
-        private readonly Color ModernAccent = Color.FromArgb(72, 198, 169);
-        private readonly Color ModernText = Color.FromArgb(235, 240, 246);
-        private readonly Color ModernMutedText = Color.FromArgb(145, 157, 172);
+        private readonly Color ModernBack = WowTheme.Back;
+        private readonly Color ModernPanel = WowTheme.Panel;
+        private readonly Color ModernAccent = WowTheme.Accent;
+        private readonly Color ModernText = WowTheme.Text;
+        private readonly Color ModernMutedText = WowTheme.MutedText;
 
         public IReadOnlyList<RecommendedDependency> InstalledDependencies => installedDependencies;
         private readonly List<RecommendedDependency> installedDependencies = new List<RecommendedDependency>();

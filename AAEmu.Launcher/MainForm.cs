@@ -535,14 +535,14 @@ namespace AAEmu.Launcher
         public bool DoAutoLaunch { get; set; } = false;
         private bool CancelPatching { get; set; } = false;
 
-        private readonly Color ModernBack = Color.FromArgb(12, 15, 21);
-        private readonly Color ModernPanel = Color.FromArgb(29, 34, 45);
-        private readonly Color ModernPanelAlt = Color.FromArgb(20, 24, 33);
-        private readonly Color ModernAccent = Color.FromArgb(72, 198, 169);
-        private readonly Color ModernAccentHot = Color.FromArgb(92, 224, 190);
-        private readonly Color ModernDanger = Color.FromArgb(210, 74, 86);
-        private readonly Color ModernText = Color.FromArgb(235, 240, 246);
-        private readonly Color ModernMutedText = Color.FromArgb(145, 157, 172);
+        private readonly Color ModernBack = WowTheme.Back;
+        private readonly Color ModernPanel = WowTheme.Panel;
+        private readonly Color ModernPanelAlt = WowTheme.PanelAlt;
+        private readonly Color ModernAccent = WowTheme.Accent;
+        private readonly Color ModernAccentHot = WowTheme.AccentHot;
+        private readonly Color ModernDanger = WowTheme.Danger;
+        private readonly Color ModernText = WowTheme.Text;
+        private readonly Color ModernMutedText = WowTheme.MutedText;
         private Label lBrandTitle;
         private Label lBrandSubtitle;
         private Panel pGameHeader;
@@ -627,7 +627,7 @@ namespace AAEmu.Launcher
             StyleTextBox(eLogin);
             StyleTextBox(ePassword);
             StyleTextBox(eServerIP);
-            cbLoginList.BackColor = Color.FromArgb(22, 27, 36);
+            cbLoginList.BackColor = Color.FromArgb(26, 20, 13);
             cbLoginList.ForeColor = ModernText;
             cbLoginList.Font = new Font("Segoe UI", 9F);
 
@@ -648,7 +648,7 @@ namespace AAEmu.Launcher
                 StyleCheckBoxLabel(label, ModernAccent, 13F);
 
             lNewsFeed.Image = null;
-            lNewsFeed.BackColor = Color.FromArgb(31, 37, 49);
+            lNewsFeed.BackColor = Color.FromArgb(30, 24, 15);
             lNewsFeed.ForeColor = ModernText;
             lNewsFeed.Font = new Font("Segoe UI", 10F);
             lNewsFeed.Padding = new Padding(12);
@@ -659,10 +659,10 @@ namespace AAEmu.Launcher
             btnWebsite.Image = null;
             ConfigureWindowButton(btnMinimize);
             ConfigureWindowButton(btnClose);
-            StyleCommandLabel(btnSettings, Color.FromArgb(45, 52, 66), ModernText, 9F);
-            StyleCommandLabel(btnWebsite, Color.FromArgb(45, 52, 66), ModernText, 9F);
-            StyleCommandLabel(lSettingsBack, Color.FromArgb(45, 52, 66), ModernText, 11F);
-            StyleCommandLabel(lDownloadLauncherUpdate, Color.Transparent, Color.FromArgb(250, 210, 90), 10F);
+            StyleCommandLabel(btnSettings, Color.FromArgb(48, 38, 24), ModernText, 9F);
+            StyleCommandLabel(btnWebsite, Color.FromArgb(48, 38, 24), ModernText, 9F);
+            StyleCommandLabel(lSettingsBack, Color.FromArgb(48, 38, 24), ModernText, 11F);
+            StyleCommandLabel(lDownloadLauncherUpdate, Color.Transparent, WowTheme.AccentHot, 10F);
 
             pPatchSteps.BackColor = Color.Transparent;
             foreach (var rb in pPatchSteps.Controls.OfType<RadioButton>())
@@ -674,7 +674,7 @@ namespace AAEmu.Launcher
             }
 
             pgbBackTotal.Image = null;
-            pgbBackTotal.BackColor = Color.FromArgb(42, 48, 61);
+            pgbBackTotal.BackColor = Color.FromArgb(50, 40, 25);
             pgbBackTotal.SizeMode = PictureBoxSizeMode.Normal;
             pgbFrontTotal.Image = null;
             pgbFrontTotal.BackColor = ModernAccent;
@@ -682,7 +682,7 @@ namespace AAEmu.Launcher
             lAppVersion.ForeColor = ModernMutedText;
             lLoadedConfig.ForeColor = ModernAccent;
             lLoadedConfig.Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
-            lDownloadLauncherUpdate.ForeColor = Color.FromArgb(250, 210, 90);
+            lDownloadLauncherUpdate.ForeColor = WowTheme.AccentHot;
             lAppVersion.Location = new Point(28, 674);
             lLoadedConfig.Location = new Point(28, 648);
             btnLocaleLang.Location = new Point(1134, 22);
@@ -705,7 +705,7 @@ namespace AAEmu.Launcher
         {
             pGameHeader = new Panel
             {
-                BackColor = Color.FromArgb(14, 17, 24),
+                BackColor = Color.FromArgb(18, 14, 9),
                 Location = new Point(0, 0),
                 Size = new Size(ClientSize.Width, 122),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
@@ -717,7 +717,7 @@ namespace AAEmu.Launcher
             var lLogo = CreateHeaderTab("Jason Games Launcher", new Point(28, 18), false);
             lLogo.Cursor = Cursors.Default;
             lLogo.Font = new Font("Segoe UI Semibold", 15F, FontStyle.Bold, GraphicsUnit.Point, 0);
-            lLogo.ForeColor = Color.FromArgb(72, 155, 255);
+            lLogo.ForeColor = WowTheme.AccentHot;
             lLogo.Size = new Size(270, 40);
             lLogo.TextAlign = ContentAlignment.MiddleLeft;
             lGameArcheAge = CreateGameIcon("AA v1.2", new Point(144, 64), true);
@@ -754,7 +754,7 @@ namespace AAEmu.Launcher
             lClientUpdateAction = new Label
             {
                 AutoSize = false,
-                BackColor = Color.FromArgb(45, 52, 66),
+                BackColor = Color.FromArgb(48, 38, 24),
                 Cursor = Cursors.Hand,
                 ForeColor = ModernText,
                 Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold, GraphicsUnit.Point, 0),
@@ -768,7 +768,7 @@ namespace AAEmu.Launcher
             lAddons = new Label
             {
                 AutoSize = false,
-                BackColor = Color.FromArgb(45, 52, 66),
+                BackColor = Color.FromArgb(48, 38, 24),
                 Cursor = Cursors.Hand,
                 ForeColor = ModernText,
                 Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold, GraphicsUnit.Point, 0),
@@ -807,7 +807,7 @@ namespace AAEmu.Launcher
             eDownloadLocation = new TextBox
             {
                 BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Color.FromArgb(22, 27, 36),
+                BackColor = Color.FromArgb(26, 20, 13),
                 ForeColor = ModernText,
                 Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point, 0)
             };
@@ -857,6 +857,7 @@ namespace AAEmu.Launcher
             LoadSelectedGameFields();
             UpdateInstallStatus();
             UpdatePlayButton(serverCheckStatus, false);
+            ShowPanelControls(currentPanel);
             Invalidate(true);
         }
 
@@ -1059,9 +1060,9 @@ namespace AAEmu.Launcher
 
         private void SetGameIconSelected(Label label, bool selected)
         {
-            label.BackColor = selected ? Color.FromArgb(42, 47, 62) : Color.Transparent;
+            label.BackColor = selected ? Color.FromArgb(52, 42, 26) : Color.Transparent;
             label.BorderStyle = selected ? BorderStyle.FixedSingle : BorderStyle.None;
-            label.ForeColor = selected ? Color.FromArgb(248, 205, 99) : Color.FromArgb(139, 174, 166);
+            label.ForeColor = selected ? WowTheme.AccentHot : WowTheme.MutedText;
         }
 
         private Label CreateGameIcon(string text, Point location, bool selected)
@@ -1069,10 +1070,10 @@ namespace AAEmu.Launcher
             return new Label
             {
                 AutoSize = false,
-                BackColor = selected ? Color.FromArgb(42, 47, 62) : Color.Transparent,
+                BackColor = selected ? Color.FromArgb(52, 42, 26) : Color.Transparent,
                 BorderStyle = selected ? BorderStyle.FixedSingle : BorderStyle.None,
                 Cursor = Cursors.Hand,
-                ForeColor = selected ? Color.FromArgb(248, 205, 99) : Color.FromArgb(139, 174, 166),
+                ForeColor = selected ? WowTheme.AccentHot : WowTheme.MutedText,
                 Font = new Font("Segoe UI Semibold", 14F, FontStyle.Bold, GraphicsUnit.Point, 0),
                 Location = location,
                 Size = new Size(56, 44),
@@ -1086,7 +1087,7 @@ namespace AAEmu.Launcher
             return new Label
             {
                 AutoSize = false,
-                BackColor = selected ? Color.FromArgb(32, 39, 52) : Color.Transparent,
+                BackColor = selected ? Color.FromArgb(40, 32, 20) : Color.Transparent,
                 Cursor = Cursors.Hand,
                 ForeColor = selected ? ModernText : ModernMutedText,
                 Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold, GraphicsUnit.Point, 0),
@@ -1213,7 +1214,7 @@ namespace AAEmu.Launcher
 
         private void StyleTextBox(TextBox textBox)
         {
-            textBox.BackColor = Color.FromArgb(22, 27, 36);
+            textBox.BackColor = Color.FromArgb(26, 20, 13);
             textBox.BorderStyle = BorderStyle.FixedSingle;
             textBox.ForeColor = ModernText;
             textBox.Font = new Font("Segoe UI", 12.5F);
@@ -1228,7 +1229,7 @@ namespace AAEmu.Launcher
 
         private void StylePathValueLabel(Label label)
         {
-            label.BackColor = Color.FromArgb(22, 27, 36);
+            label.BackColor = Color.FromArgb(26, 20, 13);
             label.BorderStyle = BorderStyle.FixedSingle;
             label.ForeColor = ModernText;
             label.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point, 0);
@@ -1239,7 +1240,7 @@ namespace AAEmu.Launcher
         // Gives the settings checkboxes a visible box outline, since a bare checkmark glyph is easy to miss
         private void StyleCheckBoxLabel(Label label, Color foreColor, float size)
         {
-            label.BackColor = Color.FromArgb(22, 27, 36);
+            label.BackColor = Color.FromArgb(26, 20, 13);
             label.ForeColor = foreColor;
             label.Font = new Font("Segoe UI", size, FontStyle.Bold, GraphicsUnit.Point, 0);
             label.BorderStyle = BorderStyle.FixedSingle;
@@ -1277,12 +1278,12 @@ namespace AAEmu.Launcher
 
             if (isHot)
             {
-                var hoverColor = isClose ? Color.FromArgb(196, 43, 43) : Color.FromArgb(40, 46, 58);
+                var hoverColor = isClose ? WowTheme.Danger : Color.FromArgb(48, 38, 24);
                 using (var brush = new SolidBrush(hoverColor))
                     e.Graphics.FillRectangle(brush, button.ClientRectangle);
             }
 
-            using (var pen = new Pen(isHot || !isClose ? ModernText : Color.FromArgb(185, 194, 205), 1.6F))
+            using (var pen = new Pen(isHot || !isClose ? ModernText : Color.FromArgb(200, 185, 155), 1.6F))
             {
                 pen.StartCap = LineCap.Round;
                 pen.EndCap = LineCap.Round;
@@ -1300,23 +1301,23 @@ namespace AAEmu.Launcher
 
         private void StyleContextMenu(ContextMenuStrip menu)
         {
-            menu.BackColor = Color.FromArgb(28, 33, 43);
+            menu.BackColor = Color.FromArgb(30, 24, 15);
             menu.ForeColor = ModernText;
             menu.RenderMode = ToolStripRenderMode.System;
         }
 
         private void LauncherForm_Paint(object sender, PaintEventArgs e)
         {
-            using (var backBrush = new LinearGradientBrush(ClientRectangle, Color.FromArgb(10, 13, 19), Color.FromArgb(23, 29, 39), 45F))
+            using (var backBrush = new LinearGradientBrush(ClientRectangle, Color.FromArgb(12, 9, 5), Color.FromArgb(28, 22, 13), 45F))
                 e.Graphics.FillRectangle(backBrush, ClientRectangle);
 
-            using (var leftBrush = new SolidBrush(Color.FromArgb(42, 20, 24, 33)))
+            using (var leftBrush = new SolidBrush(Color.FromArgb(42, 24, 19, 12)))
                 e.Graphics.FillRectangle(leftBrush, new Rectangle(0, 122, 296, ClientSize.Height - 122));
-            using (var heroBrush = new LinearGradientBrush(new Rectangle(296, 122, 984, 410), Color.FromArgb(42, 49, 66), Color.FromArgb(19, 23, 32), 0F))
+            using (var heroBrush = new LinearGradientBrush(new Rectangle(296, 122, 984, 410), Color.FromArgb(50, 40, 24), Color.FromArgb(22, 17, 10), 0F))
                 e.Graphics.FillRectangle(heroBrush, new Rectangle(296, 122, 984, 410));
-            using (var cardBrush = new SolidBrush(Color.FromArgb(220, 31, 35, 45)))
+            using (var cardBrush = new SolidBrush(Color.FromArgb(220, 36, 29, 18)))
                 e.Graphics.FillRectangle(cardBrush, new Rectangle(880, 190, 340, 286));
-            using (var headerLine = new SolidBrush(Color.FromArgb(54, 139, 235)))
+            using (var headerLine = new SolidBrush(WowTheme.Accent))
             {
                 var indicator = selectedGameId == "aa30"
                     ? new Rectangle(226, 119, 86, 3)
@@ -1334,7 +1335,7 @@ namespace AAEmu.Launcher
             {
                 using (var mainBrush = new SolidBrush(ModernPanel))
                     e.Graphics.FillRectangle(mainBrush, new Rectangle(296, 146, 732, 522));
-                using (var borderPen = new Pen(Color.FromArgb(62, 72, 88)))
+                using (var borderPen = new Pen(WowTheme.Border))
                     e.Graphics.DrawRectangle(borderPen, new Rectangle(296, 146, 732, 522));
                 return;
             }
@@ -1343,7 +1344,7 @@ namespace AAEmu.Launcher
             {
                 using (var mainBrush = new SolidBrush(ModernPanel))
                     e.Graphics.FillRectangle(mainBrush, new Rectangle(296, 184, 732, 322));
-                using (var borderPen = new Pen(Color.FromArgb(62, 72, 88)))
+                using (var borderPen = new Pen(WowTheme.Border))
                     e.Graphics.DrawRectangle(borderPen, new Rectangle(296, 184, 732, 322));
             }
         }
@@ -1354,13 +1355,13 @@ namespace AAEmu.Launcher
             if (serverState == serverCheck.Offline || serverState == serverCheck.Updating)
                 buttonColor = ModernDanger;
             else if (serverState == serverCheck.Unknown)
-                buttonColor = Color.FromArgb(86, 117, 226);
+                buttonColor = Color.FromArgb(140, 110, 60);
             else if (isMouseOver)
                 buttonColor = ModernAccentHot;
             if (!IsGameInstalled())
-                buttonColor = isMouseOver ? Color.FromArgb(73, 161, 255) : Color.FromArgb(54, 139, 235);
+                buttonColor = isMouseOver ? Color.FromArgb(220, 180, 90) : Color.FromArgb(180, 145, 75);
 
-            StyleCommandLabel(btnPlay, buttonColor, Color.FromArgb(8, 12, 16), 24F);
+            StyleCommandLabel(btnPlay, buttonColor, Color.FromArgb(15, 11, 6), 24F);
             btnPlay.Image = null;
             btnPlay.FlatStyle = FlatStyle.Flat;
         }
@@ -1553,13 +1554,15 @@ namespace AAEmu.Launcher
             panelLoginAndPatch.Visible = ((panelID == ShowPanelType.Login) || (panelID == ShowPanelType.UpdatePatch));
             panelLoginAndPatch.Location = new Point(0, 0);
             panelLoginAndPatch.Size = this.Size;
-            eLogin.Visible = (panelID == ShowPanelType.Login);
-            ePassword.Visible = (panelID == ShowPanelType.Login);
-            lLogin.Visible = (panelID == ShowPanelType.Login);
-            lPassword.Visible = (panelID == ShowPanelType.Login);
+            // JasonWoW has no launcher-side account login (WoW clients authenticate in-game), so hide these credential fields for that profile.
+            var showLoginCredentials = (panelID == ShowPanelType.Login) && selectedGameId != "jw";
+            eLogin.Visible = showLoginCredentials;
+            ePassword.Visible = showLoginCredentials;
+            lLogin.Visible = showLoginCredentials;
+            lPassword.Visible = showLoginCredentials;
             lNewsFeed.Visible = ((panelID == ShowPanelType.Login) || (panelID == ShowPanelType.UpdatePatch));
             imgBigNews.Visible = (panelID == ShowPanelType.Login);
-            cbLoginList.Visible = (cbLoginList.Items.Count > 0);
+            cbLoginList.Visible = showLoginCredentials && (cbLoginList.Items.Count > 0);
             lBigNewsImage.Visible = ((panelID == ShowPanelType.Login) && (lBigNewsImage.Tag != null) && (lBigNewsImage.Tag.ToString() != ""));
             wbNews.Visible = (((panelID == ShowPanelType.Login) || (panelID == ShowPanelType.UpdatePatch)) && (wbNews.Tag != null) && (wbNews.Tag.ToString() == "1"));
             lPatchProgressBarText.Visible = (panelID == ShowPanelType.UpdatePatch);
@@ -2798,7 +2801,7 @@ namespace AAEmu.Launcher
                 Setting.ClientLoginType = AAAutoDetectClient.GuessLauncher(GetAAPath());
                 UpdateGameClientTypeLabel();
                 if (oldType != Setting.ClientLoginType)
-                    lGameClientType.ForeColor = Color.FromArgb(250, 210, 90);
+                    lGameClientType.ForeColor = WowTheme.AccentHot;
             }
             Application.UseWaitCursor = false;
             ApplySelectedGameToLegacySettings();

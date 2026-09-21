@@ -18,11 +18,11 @@ namespace AAEmu.Launcher
             InitializeComponent();
 
             // FormBorderStyle is None, so draw our own visible box outline instead of relying on the OS chrome
-            BackColor = Color.FromArgb(28, 33, 43);
-            lInfo.ForeColor = Color.White;
+            BackColor = WowTheme.PanelAlt;
+            lInfo.ForeColor = WowTheme.Text;
             Paint += (s, e) =>
             {
-                using (var pen = new Pen(Color.FromArgb(90, 130, 210), 2))
+                using (var pen = new Pen(WowTheme.Accent, 2))
                     e.Graphics.DrawRectangle(pen, 1, 1, ClientSize.Width - 3, ClientSize.Height - 3);
             };
         }

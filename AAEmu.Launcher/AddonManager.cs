@@ -309,6 +309,19 @@ namespace AAEmu.Launcher
             }
         }
 
+        /// <summary>
+        /// Replaces any manifest entry that already owns one of the given folders (regardless of where it came
+        /// from - a GitHub repo, a JWoW Exclusive, or a prior "found on disk" scan) and adds the new entry.
+        /// A fresh install must always win the folder it just wrote to, or the same folder ends up tracked by
+        /// two entries at once, and removing one deletes files the other still thinks it owns.
+        /// </summary>
+        public static void ReplaceAddonForFolders(AddonManifest manifest, InstalledAddon newEntry)
+        {
+            var newFolders = new HashSet<string>(newEntry.Folders, StringComparer.OrdinalIgnoreCase);
+            manifest.Addons.RemoveAll(a => a.Folders.Any(f => newFolders.Contains(f)));
+            manifest.Addons.Add(newEntry);
+        }
+
         public static void SaveManifest(string addOnsPath, AddonManifest manifest)
         {
             Directory.CreateDirectory(addOnsPath);
