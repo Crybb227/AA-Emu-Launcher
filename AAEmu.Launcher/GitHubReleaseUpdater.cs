@@ -242,11 +242,31 @@ namespace AAEmu.Launcher
             var mainExePath = Path.Combine(appDirectory, mainExeName);
 
             var sb = new StringBuilder();
-            sb.Append("$ErrorActionPreference = 'SilentlyContinue'\r\n");
             sb.Append($"try {{ Wait-Process -Id {currentPid} -Timeout 30 }} catch {{}}\r\n");
             sb.Append("Start-Sleep -Milliseconds 500\r\n");
-            sb.Append($"Copy-Item -Path '{stagingDirectory}\\*' -Destination '{appDirectory}' -Recurse -Force\r\n");
-            sb.Append($"Remove-Item -Path '{stagingDirectory}' -Recurse -Force\r\n");
+            sb.Append("\r\n");
+            // Copy file-by-file with retries instead of one bulk Copy-Item: the just-exited launcher's own
+            // .exe can still hold a brief OS-level lock after the process is gone (AV scan, delayed handle
+            // release), and a single failed file inside a bulk -Recurse copy was being silently swallowed,
+            // leaving the old .exe in place while everything else updated.
+            sb.Append("try {\r\n");
+            sb.Append("  Get-ChildItem -Path '" + stagingDirectory + "' -Recurse -File | ForEach-Object {\r\n");
+            sb.Append("    $relativePath = $_.FullName.Substring('" + stagingDirectory + "'.Length).TrimStart('\\')\r\n");
+            sb.Append("    $destPath = Join-Path '" + appDirectory + "' $relativePath\r\n");
+            sb.Append("    $destDir = Split-Path -Path $destPath -Parent\r\n");
+            sb.Append("    if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }\r\n");
+            sb.Append("    $copied = $false\r\n");
+            sb.Append("    for ($attempt = 1; $attempt -le 10; $attempt++) {\r\n");
+            sb.Append("      try { Copy-Item -Path $_.FullName -Destination $destPath -Force -ErrorAction Stop; $copied = $true; break }\r\n");
+            sb.Append("      catch { Start-Sleep -Milliseconds 500 }\r\n");
+            sb.Append("    }\r\n");
+            sb.Append("    if (-not $copied) { throw \"Failed to copy $relativePath after 10 attempts (file still in use)\" }\r\n");
+            sb.Append("  }\r\n");
+            sb.Append("  Remove-Item -Path '" + stagingDirectory + "' -Recurse -Force -ErrorAction SilentlyContinue\r\n");
+            sb.Append("} catch {\r\n");
+            sb.Append("  Add-Content -Path '" + Path.Combine(appDirectory, "update-error.log") + "' -Value \"$(Get-Date) - $($_.Exception.Message)\"\r\n");
+            sb.Append("}\r\n");
+            sb.Append("\r\n");
 
             if (removedRelativeFiles != null)
             {
@@ -256,12 +276,12 @@ namespace AAEmu.Launcher
                         continue;
 
                     var fullPath = Path.Combine(appDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar));
-                    sb.Append($"Remove-Item -Path '{fullPath}' -Force\r\n");
+                    sb.Append($"Remove-Item -Path '{fullPath}' -Force -ErrorAction SilentlyContinue\r\n");
                 }
             }
 
             sb.Append($"Start-Process -FilePath '{mainExePath}'\r\n");
-            sb.Append($"Remove-Item -Path '{scriptPath}' -Force\r\n");
+            sb.Append($"Remove-Item -Path '{scriptPath}' -Force -ErrorAction SilentlyContinue\r\n");
 
             File.WriteAllText(scriptPath, sb.ToString());
 
