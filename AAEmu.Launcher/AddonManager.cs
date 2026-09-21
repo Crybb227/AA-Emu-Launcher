@@ -25,6 +25,9 @@ namespace AAEmu.Launcher
 
         [JsonProperty("description")]
         public string Description { get; set; }
+
+        [JsonProperty("imageUrl")]
+        public string ImageUrl { get; set; }
     }
 
     public class CuratedAddonCatalog
@@ -34,6 +37,50 @@ namespace AAEmu.Launcher
 
         [JsonProperty("addons")]
         public List<CuratedAddon> Addons { get; set; } = new List<CuratedAddon>();
+    }
+
+    /// <summary>A suggested companion addon shown when installing something that recommends it (e.g. NemesisTracker's OptionalDeps).</summary>
+    public class RecommendedDependency
+    {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("downloadUrl")]
+        public string DownloadUrl { get; set; } // direct .zip URL, not a GitHub repo
+
+        [JsonProperty("description")]
+        public string Description { get; set; }
+    }
+
+    /// <summary>An entry in the JWoW Exclusives catalog: custom addons built for this server, all hosted in one repo.</summary>
+    public class ExclusiveAddon
+    {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("repo")]
+        public string Repo { get; set; }
+
+        [JsonProperty("folder")]
+        public string Folder { get; set; } // subfolder within the repo holding this addon's .toc
+
+        [JsonProperty("description")]
+        public string Description { get; set; }
+
+        [JsonProperty("imageUrl")]
+        public string ImageUrl { get; set; }
+
+        [JsonProperty("recommends")]
+        public List<RecommendedDependency> Recommends { get; set; } = new List<RecommendedDependency>();
+    }
+
+    public class ExclusiveAddonCatalog
+    {
+        [JsonProperty("updated")]
+        public string Updated { get; set; }
+
+        [JsonProperty("addons")]
+        public List<ExclusiveAddon> Addons { get; set; } = new List<ExclusiveAddon>();
     }
 
     /// <summary>A WoW addon installed via the addon manager, tracked so it can be updated or removed later.</summary>
@@ -46,13 +93,22 @@ namespace AAEmu.Launcher
         public string Repo { get; set; } // "owner/name"
 
         [JsonProperty("version")]
-        public string Version { get; set; } // release tag, or commit sha for branch installs
+        public string Version { get; set; } // release tag, commit sha, or .toc version for exclusives
 
         [JsonProperty("folders")]
         public List<string> Folders { get; set; } = new List<string>(); // top-level AddOns subfolders this addon owns
 
         [JsonProperty("installedAt")]
         public DateTime InstalledAt { get; set; } = DateTime.UtcNow;
+
+        [JsonProperty("isExclusive", NullValueHandling = NullValueHandling.Ignore)]
+        public bool IsExclusive { get; set; }
+
+        [JsonProperty("exclusiveFolder", NullValueHandling = NullValueHandling.Ignore)]
+        public string ExclusiveFolder { get; set; } // subfolder within the exclusives repo, for re-checking .toc version
+
+        [JsonProperty("foundOnDisk", NullValueHandling = NullValueHandling.Ignore)]
+        public bool FoundOnDisk { get; set; } // true for addons discovered by scanning the AddOns folder rather than installed here
     }
 
     public class AddonManifest
@@ -78,6 +134,8 @@ namespace AAEmu.Launcher
     {
         private const string ManifestFileName = "wow-addons.json";
         private const string CuratedCatalogUrl = "https://raw.githubusercontent.com/Crybb227/AA-Emu-Launcher/master/addons/curated-addons.json";
+        private const string ExclusiveCatalogUrl = "https://raw.githubusercontent.com/Crybb227/JWoW-Exclusive-Addons/main/exclusive-addons.json";
+        private static readonly Regex TocVersionPattern = new Regex(@"^##\s*Version\s*:\s*(?<version>.+?)\s*$", RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.Compiled);
         private static readonly Regex RepoUrlPattern = new Regex(
             @"^https?://github\.com/(?<owner>[^/]+)/(?<repo>[^/#?]+?)(\.git)?/?$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -111,6 +169,123 @@ namespace AAEmu.Launcher
         {
             var json = await client.GetStringAsync(CuratedCatalogUrl);
             return JsonConvert.DeserializeObject<CuratedAddonCatalog>(json) ?? new CuratedAddonCatalog();
+        }
+
+        /// <summary>Fetches the JWoW Exclusives catalog: custom addons for this server, hosted together in one repo.</summary>
+        public static async Task<ExclusiveAddonCatalog> FetchExclusiveCatalogAsync(HttpClient client)
+        {
+            var json = await client.GetStringAsync(ExclusiveCatalogUrl);
+            return JsonConvert.DeserializeObject<ExclusiveAddonCatalog>(json) ?? new ExclusiveAddonCatalog();
+        }
+
+        /// <summary>Reads the "## Version:" line from an exclusive addon's .toc file at the head of its repo, without downloading the whole zip.</summary>
+        public static async Task<string> GetExclusiveAddonVersionAsync(HttpClient client, ExclusiveAddon addon)
+        {
+            var tocUrl = $"https://raw.githubusercontent.com/{addon.Repo}/main/{addon.Folder}/{addon.Folder}.toc";
+            var tocContent = await client.GetStringAsync(tocUrl);
+            var match = TocVersionPattern.Match(tocContent);
+            return match.Success ? match.Groups["version"].Value : "unknown";
+        }
+
+        /// <summary>Downloads and installs a single addon folder out of the (multi-addon) exclusives repo.</summary>
+        public static async Task<(List<string> folders, string version)> InstallExclusiveAddonAsync(HttpClient client, ExclusiveAddon addon, string addOnsPath, CancellationToken cancellationToken)
+        {
+            var version = await GetExclusiveAddonVersionAsync(client, addon);
+            var downloadUrl = $"https://github.com/{addon.Repo}/archive/refs/heads/main.zip";
+            var zipPath = await DownloadZipAsync(client, downloadUrl, Path.Combine(Path.GetTempPath(), "aaemu_addon_dl"), null, cancellationToken);
+
+            var tempExtractPath = Path.Combine(Path.GetTempPath(), "aaemu_addon_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempExtractPath);
+            try
+            {
+                ZipFile.ExtractToDirectory(zipPath, tempExtractPath);
+                var repoRoot = Directory.GetDirectories(tempExtractPath).FirstOrDefault() ?? tempExtractPath;
+                var sourceFolder = Path.Combine(repoRoot, addon.Folder);
+                if (!Directory.Exists(sourceFolder))
+                    throw new InvalidOperationException($"The exclusives repo did not contain a '{addon.Folder}' folder.");
+
+                var destination = Path.Combine(addOnsPath, addon.Folder);
+                if (Directory.Exists(destination))
+                    Directory.Delete(destination, true);
+                CopyDirectory(sourceFolder, destination);
+
+                return (new List<string> { addon.Folder }, version);
+            }
+            finally
+            {
+                try { Directory.Delete(tempExtractPath, true); } catch { /* best effort */ }
+                try { File.Delete(zipPath); } catch { /* best effort */ }
+            }
+        }
+
+        /// <summary>Downloads and installs an addon from a direct .zip URL (used for recommended dependencies with no GitHub repo).</summary>
+        public static async Task<List<string>> InstallFromDirectZipAsync(HttpClient client, string downloadUrl, string addOnsPath, CancellationToken cancellationToken)
+        {
+            var zipPath = await DownloadZipAsync(client, downloadUrl, Path.Combine(Path.GetTempPath(), "aaemu_addon_dl"), null, cancellationToken);
+            return ExtractAddon(zipPath, addOnsPath);
+        }
+
+        public static async Task<AddonUpdateCheckResult> CheckExclusiveForUpdateAsync(HttpClient client, InstalledAddon installed, ExclusiveAddon catalogEntry)
+        {
+            try
+            {
+                var latestVersion = await GetExclusiveAddonVersionAsync(client, catalogEntry);
+                return new AddonUpdateCheckResult
+                {
+                    Addon = installed,
+                    LatestVersion = latestVersion,
+                    UpdateAvailable = !string.Equals(latestVersion, installed.Version, StringComparison.OrdinalIgnoreCase)
+                };
+            }
+            catch (Exception ex)
+            {
+                return new AddonUpdateCheckResult { Addon = installed, Error = ex.Message };
+            }
+        }
+
+        /// <summary>
+        /// Addon folder/subfolder names that ship with the base game client and should never be listed
+        /// as a manageable addon, regardless of how the AddOns folder was populated.
+        /// </summary>
+        public static bool IsBlizzardAddonFolder(string folderName)
+        {
+            return !string.IsNullOrEmpty(folderName) && folderName.StartsWith("Blizzard", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Scans the AddOns folder directly and reconciles it with the manifest: folders present on disk but
+        /// missing from the manifest are added as "found on disk" entries (source unknown), and manifest
+        /// entries whose folders no longer exist are dropped. Blizzard_* folders are always ignored.
+        /// </summary>
+        public static AddonManifest ScanAndReconcile(string addOnsPath, AddonManifest manifest)
+        {
+            if (!Directory.Exists(addOnsPath))
+                return manifest;
+
+            var onDiskFolders = new HashSet<string>(
+                Directory.GetDirectories(addOnsPath).Select(Path.GetFileName).Where(name => !IsBlizzardAddonFolder(name)),
+                StringComparer.OrdinalIgnoreCase);
+
+            // Drop manifest entries whose folders were deleted outside the launcher.
+            manifest.Addons.RemoveAll(a => a.Folders.Count > 0 && !a.Folders.Any(f => onDiskFolders.Contains(f)));
+
+            var trackedFolders = new HashSet<string>(manifest.Addons.SelectMany(a => a.Folders), StringComparer.OrdinalIgnoreCase);
+            foreach (var folder in onDiskFolders)
+            {
+                if (trackedFolders.Contains(folder))
+                    continue;
+
+                manifest.Addons.Add(new InstalledAddon
+                {
+                    Name = folder,
+                    Repo = string.Empty,
+                    Version = "unknown",
+                    Folders = new List<string> { folder },
+                    FoundOnDisk = true
+                });
+            }
+
+            return manifest;
         }
 
         public static string GetManifestPath(string addOnsPath)

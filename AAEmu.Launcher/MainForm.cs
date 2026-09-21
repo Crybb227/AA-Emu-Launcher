@@ -12,10 +12,12 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace AAEmu.Launcher
@@ -550,6 +552,7 @@ namespace AAEmu.Launcher
         private Label lGamePlaceholder;
         private Label lInstallStatus;
         private Label lAddons;
+        private Label lAddonUpdateBadge;
         private Label lClientUpdateAction;
         private Label lDownloadLocationLabel;
         private TextBox eDownloadLocation;
@@ -777,6 +780,21 @@ namespace AAEmu.Launcher
             };
             lAddons.Click += LAddons_Click;
 
+            lAddonUpdateBadge = new Label
+            {
+                AutoSize = false,
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand,
+                ForeColor = ModernAccentHot,
+                Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold, GraphicsUnit.Point, 0),
+                Location = new Point(28, 624),
+                Size = new Size(242, 20),
+                Text = string.Empty,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Visible = false
+            };
+            lAddonUpdateBadge.Click += LAddons_Click;
+
             lDownloadLocationLabel = new Label
             {
                 AutoSize = false,
@@ -801,6 +819,7 @@ namespace AAEmu.Launcher
             Controls.Add(lInstallStatus);
             Controls.Add(lClientUpdateAction);
             Controls.Add(lAddons);
+            Controls.Add(lAddonUpdateBadge);
             panelSettings.Controls.Add(lDownloadLocationLabel);
             panelSettings.Controls.Add(eDownloadLocation);
             Controls.Add(lHeroTitle);
@@ -823,6 +842,9 @@ namespace AAEmu.Launcher
             SetGameIconSelected(lGameArcheAge30, isAa30);
             SetGameIconSelected(lGameJasonWoW, selectedGameId == "jw");
             lAddons.Visible = selectedGameId == "jw";
+            UpdateAddonUpdateBadgeVisibility();
+            if (selectedGameId == "jw")
+                _ = CheckExclusiveAddonUpdatesAsync();
 
             lHeroTitle.Text = selectedGameId == "jw" ? "JASONWOW" : "ARCHEAGE";
             lHeroNewsTitle.Text = isAa30 ? "AA v3.0.3" : selectedGameId == "jw" ? "JasonWoW" : "AA v1.2";
@@ -1123,6 +1145,8 @@ namespace AAEmu.Launcher
             lInstallStatus.Size = new Size(242, 62);
             lAddons.Location = new Point(28, 588);
             lAddons.Size = new Size(242, 32);
+            lAddonUpdateBadge.Location = new Point(28, 624);
+            lAddonUpdateBadge.Size = new Size(242, 20);
             lHeroTitle.Location = new Point(28, 178);
             lHeroTitle.Size = new Size(242, 72);
             lHeroTitle.Font = new Font("Segoe UI Semibold", 20F, FontStyle.Bold, GraphicsUnit.Point, 0);
@@ -1607,9 +1631,11 @@ namespace AAEmu.Launcher
             lInstallStatus.BringToFront();
             lClientUpdateAction.BringToFront();
             lAddons.BringToFront();
+            lAddonUpdateBadge.BringToFront();
             lClientUpdateAction.Visible = showHome;
             lInstallStatus.Visible = showHome;
             lAddons.Visible = showHome && selectedGameId == "jw";
+            UpdateAddonUpdateBadgeVisibility();
             UpdateInstallStatus();
 
             currentPanel = panelID;
@@ -3195,10 +3221,66 @@ namespace AAEmu.Launcher
                 return string.Empty;
 
             var installRoot = Path.GetDirectoryName(Setting.WoWPath);
-            return string.IsNullOrWhiteSpace(installRoot) ? string.Empty : Path.Combine(installRoot, "Interface", "AddOns");
+            return string.IsNullOrWhiteSpace(installRoot) ? string.Empty : Path.Combine(installRoot, "interface", "addons");
         }
 
-        private void LAddons_Click(object sender, EventArgs e)
+        private int pendingExclusiveAddonUpdates = 0;
+
+        private void UpdateAddonUpdateBadgeVisibility()
+        {
+            var visible = selectedGameId == "jw" && pendingExclusiveAddonUpdates > 0 && lAddons.Visible;
+            lAddonUpdateBadge.Visible = visible;
+            lAddonUpdateBadge.Text = pendingExclusiveAddonUpdates == 1
+                ? "1 JWoW Exclusive update available"
+                : $"{pendingExclusiveAddonUpdates} JWoW Exclusive updates available";
+        }
+
+        /// <summary>Background check of installed JWoW Exclusive addons against the exclusives repo, surfaced as a badge under Manage Addons.</summary>
+        private async Task CheckExclusiveAddonUpdatesAsync()
+        {
+            try
+            {
+                var addOnsPath = GetDefaultWoWAddOnsPath();
+                if (string.IsNullOrWhiteSpace(addOnsPath) || !Directory.Exists(addOnsPath))
+                    return;
+
+                var manifest = AddonManager.LoadManifest(addOnsPath);
+                var installedExclusives = manifest.Addons.Where(a => a.IsExclusive).ToList();
+                if (installedExclusives.Count == 0)
+                    return;
+
+                using (var client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd("AAEmu.Launcher");
+                    var catalog = await AddonManager.FetchExclusiveCatalogAsync(client);
+
+                    var updateCount = 0;
+                    foreach (var installed in installedExclusives)
+                    {
+                        var catalogEntry = catalog.Addons.FirstOrDefault(a => string.Equals(a.Folder, installed.ExclusiveFolder, StringComparison.OrdinalIgnoreCase));
+                        if (catalogEntry == null)
+                            continue;
+
+                        var result = await AddonManager.CheckExclusiveForUpdateAsync(client, installed, catalogEntry);
+                        if (result.UpdateAvailable)
+                            updateCount++;
+                    }
+
+                    pendingExclusiveAddonUpdates = updateCount;
+                }
+            }
+            catch
+            {
+                // Best effort background check; a failed update check should not disturb the main UI.
+            }
+            finally
+            {
+                if (!IsDisposed)
+                    UpdateAddonUpdateBadgeVisibility();
+            }
+        }
+
+        private async void LAddons_Click(object sender, EventArgs e)
         {
             using (var addonForm = new WowAddonManagerForm(GetDefaultWoWAddOnsPath()))
             {
@@ -3209,6 +3291,8 @@ namespace AAEmu.Launcher
                     SaveSettings();
                 }
             }
+
+            await CheckExclusiveAddonUpdatesAsync();
         }
 
         private async void LClientUpdateAction_Click(object sender, EventArgs e)

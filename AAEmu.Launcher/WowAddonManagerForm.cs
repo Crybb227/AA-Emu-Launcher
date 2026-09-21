@@ -1,5 +1,5 @@
 using System;
-using System.ComponentModel;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -12,7 +12,7 @@ namespace AAEmu.Launcher
 {
     /// <summary>
     /// Self-contained dialog for installing, updating, and removing WoW addons from GitHub repositories,
-    /// plus browsing a curated catalog of popular WotLK 3.3.5 addons fetched live from GitHub.
+    /// browsing a curated catalog of popular WotLK 3.3.5 addons, and installing JWoW Exclusive addons.
     /// Built entirely in code (no .resx) to match ClientDownloadForm/URIGenForm.
     /// </summary>
     public class WowAddonManagerForm : Form
@@ -33,6 +33,7 @@ namespace AAEmu.Launcher
         private ListView lvAddons;
         private TextBox eRepoUrl;
         private Button btnAddAddon;
+        private Button btnRefreshInstalled;
         private Button btnCheckUpdates;
         private Button btnUpdateSelected;
         private Button btnRemoveSelected;
@@ -40,9 +41,20 @@ namespace AAEmu.Launcher
         // Browse tab
         private readonly TabPage tabBrowse;
         private ListView lvCatalog;
+        private PictureBox pbCatalogPreview;
         private Button btnRefreshCatalog;
         private Button btnInstallFromCatalog;
         private bool catalogLoaded;
+
+        // JWoW Exclusives tab
+        private readonly TabPage tabExclusives;
+        private ListView lvExclusives;
+        private PictureBox pbExclusivesPreview;
+        private Button btnRefreshExclusives;
+        private Button btnInstallExclusive;
+        private Button btnCheckExclusiveUpdates;
+        private bool exclusivesLoaded;
+        private ExclusiveAddonCatalog exclusiveCatalog;
 
         private readonly Label lStatus;
         private readonly ProgressBar pbProgress;
@@ -57,7 +69,7 @@ namespace AAEmu.Launcher
             addOnsPath = initialAddOnsPath ?? string.Empty;
 
             Text = "WoW Addon Manager";
-            ClientSize = new Size(760, 600);
+            ClientSize = new Size(780, 620);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
             MaximizeBox = false;
@@ -67,27 +79,32 @@ namespace AAEmu.Launcher
             Font = new Font("Segoe UI", 9.5F);
 
             var lFolderLabel = new Label { Left = 16, Top = 14, Width = 100, Height = 24, Text = "AddOns folder:", ForeColor = ModernMutedText };
-            eAddonsFolder = new TextBox { Left = 16, Top = 38, Width = 600, Height = 26, ReadOnly = true, BackColor = ModernPanel, ForeColor = ModernText, BorderStyle = BorderStyle.FixedSingle, Text = addOnsPath };
-            btnBrowseFolder = new Button { Left = 624, Top = 37, Width = 120, Height = 26, Text = "Browse...", FlatStyle = FlatStyle.Flat };
+            eAddonsFolder = new TextBox { Left = 16, Top = 38, Width = 620, Height = 26, ReadOnly = true, BackColor = ModernPanel, ForeColor = ModernText, BorderStyle = BorderStyle.FixedSingle, Text = addOnsPath };
+            btnBrowseFolder = new Button { Left = 644, Top = 37, Width = 120, Height = 26, Text = "Browse...", FlatStyle = FlatStyle.Flat };
             btnBrowseFolder.Click += BtnBrowseFolder_Click;
 
-            tabs = new TabControl { Left = 16, Top = 72, Width = 728, Height = 424 };
+            tabs = new TabControl { Left = 16, Top = 72, Width = 748, Height = 444 };
 
             tabInstalled = new TabPage("Installed");
             tabBrowse = new TabPage("Browse Popular Addons");
+            tabExclusives = new TabPage("JWoW Exclusives");
             tabs.TabPages.Add(tabInstalled);
             tabs.TabPages.Add(tabBrowse);
+            tabs.TabPages.Add(tabExclusives);
             tabs.SelectedIndexChanged += (s, e) =>
             {
                 if (tabs.SelectedTab == tabBrowse && !catalogLoaded)
                     _ = LoadCuratedCatalogAsync();
+                else if (tabs.SelectedTab == tabExclusives && !exclusivesLoaded)
+                    _ = LoadExclusiveCatalogAsync();
             };
 
             BuildInstalledTab();
             BuildBrowseTab();
+            BuildExclusivesTab();
 
-            lStatus = new Label { Left = 16, Top = 504, Width = 728, Height = 20, Text = string.Empty, ForeColor = ModernMutedText };
-            pbProgress = new ProgressBar { Left = 16, Top = 526, Width = 728, Height = 18, Style = ProgressBarStyle.Marquee, Visible = false };
+            lStatus = new Label { Left = 16, Top = 524, Width = 748, Height = 20, Text = string.Empty, ForeColor = ModernMutedText };
+            pbProgress = new ProgressBar { Left = 16, Top = 546, Width = 748, Height = 18, Style = ProgressBarStyle.Marquee, Visible = false };
 
             Controls.AddRange(new Control[]
             {
@@ -101,19 +118,21 @@ namespace AAEmu.Launcher
 
         private void BuildInstalledTab()
         {
-            var lRepoLabel = new Label { Left = 12, Top = 10, Width = 400, Height = 24, Text = "Add addon (GitHub repo URL or owner/repo):", ForeColor = ModernMutedText };
-            eRepoUrl = new TextBox { Left = 12, Top = 34, Width = 460, Height = 26, BackColor = ModernPanel, ForeColor = ModernText, BorderStyle = BorderStyle.FixedSingle };
-            btnAddAddon = new Button { Left = 480, Top = 33, Width = 110, Height = 26, Text = "Install", FlatStyle = FlatStyle.Flat, BackColor = ModernAccent, ForeColor = Color.Black };
+            var lRepoLabel = new Label { Left = 12, Top = 10, Width = 380, Height = 24, Text = "Add addon (GitHub repo URL or owner/repo):", ForeColor = ModernMutedText };
+            eRepoUrl = new TextBox { Left = 12, Top = 34, Width = 400, Height = 26, BackColor = ModernPanel, ForeColor = ModernText, BorderStyle = BorderStyle.FixedSingle };
+            btnAddAddon = new Button { Left = 420, Top = 33, Width = 90, Height = 26, Text = "Install", FlatStyle = FlatStyle.Flat, BackColor = ModernAccent, ForeColor = Color.Black };
             btnAddAddon.Click += BtnAddAddon_Click;
-            btnCheckUpdates = new Button { Left = 598, Top = 33, Width = 100, Height = 26, Text = "Check Updates", FlatStyle = FlatStyle.Flat };
+            btnRefreshInstalled = new Button { Left = 516, Top = 33, Width = 90, Height = 26, Text = "Refresh", FlatStyle = FlatStyle.Flat };
+            btnRefreshInstalled.Click += (s, e) => RefreshAddonList();
+            btnCheckUpdates = new Button { Left = 612, Top = 33, Width = 106, Height = 26, Text = "Check Updates", FlatStyle = FlatStyle.Flat };
             btnCheckUpdates.Click += BtnCheckUpdates_Click;
 
             lvAddons = new ListView
             {
                 Left = 12,
                 Top = 70,
-                Width = 686,
-                Height = 260,
+                Width = 706,
+                Height = 280,
                 View = View.Details,
                 FullRowSelect = true,
                 GridLines = false,
@@ -123,32 +142,43 @@ namespace AAEmu.Launcher
                 BorderStyle = BorderStyle.FixedSingle,
             };
             lvAddons.Columns.Add("Addon", 240);
-            lvAddons.Columns.Add("Repo", 220);
+            lvAddons.Columns.Add("Repo / Source", 230);
             lvAddons.Columns.Add("Version", 100);
-            lvAddons.Columns.Add("Status", 110);
+            lvAddons.Columns.Add("Status", 120);
             lvAddons.SelectedIndexChanged += (s, e) => UpdateActionButtonsEnabled();
 
-            btnUpdateSelected = new Button { Left = 12, Top = 340, Width = 140, Height = 30, Text = "Update Selected", FlatStyle = FlatStyle.Flat };
+            btnUpdateSelected = new Button { Left = 12, Top = 360, Width = 140, Height = 30, Text = "Update Selected", FlatStyle = FlatStyle.Flat };
             btnUpdateSelected.Click += BtnUpdateSelected_Click;
-            btnRemoveSelected = new Button { Left = 160, Top = 340, Width = 140, Height = 30, Text = "Remove Selected", FlatStyle = FlatStyle.Flat, ForeColor = ModernDanger };
+            btnRemoveSelected = new Button { Left = 160, Top = 360, Width = 140, Height = 30, Text = "Remove Selected", FlatStyle = FlatStyle.Flat, ForeColor = ModernDanger };
             btnRemoveSelected.Click += BtnRemoveSelected_Click;
 
-            tabInstalled.Controls.AddRange(new Control[] { lRepoLabel, eRepoUrl, btnAddAddon, btnCheckUpdates, lvAddons, btnUpdateSelected, btnRemoveSelected });
+            var lHint = new Label
+            {
+                Left = 12,
+                Top = 398,
+                Width = 706,
+                Height = 20,
+                Text = "Refresh rescans the AddOns folder directly, so anything you dropped in manually shows up here too (Blizzard_* folders are ignored).",
+                ForeColor = ModernMutedText,
+                Font = new Font("Segoe UI", 8F)
+            };
+
+            tabInstalled.Controls.AddRange(new Control[] { lRepoLabel, eRepoUrl, btnAddAddon, btnRefreshInstalled, btnCheckUpdates, lvAddons, btnUpdateSelected, btnRemoveSelected, lHint });
             tabInstalled.BackColor = ModernBack;
         }
 
         private void BuildBrowseTab()
         {
-            var lHint = new Label { Left = 12, Top = 10, Width = 500, Height = 24, Text = "Popular WotLK 3.3.5 addons, fetched live from GitHub. Double-click or select and install.", ForeColor = ModernMutedText };
-            btnRefreshCatalog = new Button { Left = 598, Top = 8, Width = 100, Height = 26, Text = "Refresh", FlatStyle = FlatStyle.Flat };
+            var lHint = new Label { Left = 12, Top = 10, Width = 460, Height = 24, Text = "Popular WotLK 3.3.5 addons, fetched live from GitHub.", ForeColor = ModernMutedText };
+            btnRefreshCatalog = new Button { Left = 618, Top = 8, Width = 100, Height = 26, Text = "Refresh", FlatStyle = FlatStyle.Flat };
             btnRefreshCatalog.Click += async (s, e) => await LoadCuratedCatalogAsync(forceRefresh: true);
 
             lvCatalog = new ListView
             {
                 Left = 12,
                 Top = 42,
-                Width = 686,
-                Height = 288,
+                Width = 480,
+                Height = 308,
                 View = View.Details,
                 FullRowSelect = true,
                 GridLines = false,
@@ -157,18 +187,93 @@ namespace AAEmu.Launcher
                 ForeColor = ModernText,
                 BorderStyle = BorderStyle.FixedSingle,
             };
-            lvCatalog.Columns.Add("Addon", 200);
-            lvCatalog.Columns.Add("Category", 140);
-            lvCatalog.Columns.Add("Description", 260);
-            lvCatalog.Columns.Add("Repo", 80);
+            lvCatalog.Columns.Add("Addon", 160);
+            lvCatalog.Columns.Add("Category", 130);
+            lvCatalog.Columns.Add("Description", 190);
             lvCatalog.DoubleClick += async (s, e) => await InstallSelectedFromCatalogAsync();
-            lvCatalog.SelectedIndexChanged += (s, e) => btnInstallFromCatalog.Enabled = lvCatalog.SelectedItems.Count > 0;
+            lvCatalog.SelectedIndexChanged += (s, e) =>
+            {
+                btnInstallFromCatalog.Enabled = lvCatalog.SelectedItems.Count > 0;
+                UpdatePreviewImage(pbCatalogPreview, lvCatalog.SelectedItems.Count > 0 ? ((CuratedAddon)lvCatalog.SelectedItems[0].Tag).ImageUrl : null);
+            };
 
-            btnInstallFromCatalog = new Button { Left = 12, Top = 340, Width = 160, Height = 30, Text = "Install Selected", FlatStyle = FlatStyle.Flat, BackColor = ModernAccent, ForeColor = Color.Black, Enabled = false };
+            pbCatalogPreview = new PictureBox { Left = 500, Top = 42, Width = 218, Height = 164, BorderStyle = BorderStyle.FixedSingle, BackColor = ModernPanel, SizeMode = PictureBoxSizeMode.Zoom };
+
+            btnInstallFromCatalog = new Button { Left = 12, Top = 360, Width = 160, Height = 30, Text = "Install Selected", FlatStyle = FlatStyle.Flat, BackColor = ModernAccent, ForeColor = Color.Black, Enabled = false };
             btnInstallFromCatalog.Click += async (s, e) => await InstallSelectedFromCatalogAsync();
 
-            tabBrowse.Controls.AddRange(new Control[] { lHint, btnRefreshCatalog, lvCatalog, btnInstallFromCatalog });
+            tabBrowse.Controls.AddRange(new Control[] { lHint, btnRefreshCatalog, lvCatalog, pbCatalogPreview, btnInstallFromCatalog });
             tabBrowse.BackColor = ModernBack;
+        }
+
+        private void BuildExclusivesTab()
+        {
+            var lHint = new Label { Left = 12, Top = 10, Width = 460, Height = 24, Text = "Custom addons built for JasonWoW.", ForeColor = ModernMutedText };
+            btnRefreshExclusives = new Button { Left = 496, Top = 8, Width = 100, Height = 26, Text = "Refresh", FlatStyle = FlatStyle.Flat };
+            btnRefreshExclusives.Click += async (s, e) => await LoadExclusiveCatalogAsync(forceRefresh: true);
+            btnCheckExclusiveUpdates = new Button { Left = 602, Top = 8, Width = 116, Height = 26, Text = "Check Updates", FlatStyle = FlatStyle.Flat };
+            btnCheckExclusiveUpdates.Click += async (s, e) => await CheckExclusiveUpdatesAsync();
+
+            lvExclusives = new ListView
+            {
+                Left = 12,
+                Top = 42,
+                Width = 480,
+                Height = 308,
+                View = View.Details,
+                FullRowSelect = true,
+                GridLines = false,
+                MultiSelect = false,
+                BackColor = ModernPanel,
+                ForeColor = ModernText,
+                BorderStyle = BorderStyle.FixedSingle,
+            };
+            lvExclusives.Columns.Add("Addon", 160);
+            lvExclusives.Columns.Add("Description", 220);
+            lvExclusives.Columns.Add("Status", 96);
+            lvExclusives.DoubleClick += async (s, e) => await InstallSelectedExclusiveAsync();
+            lvExclusives.SelectedIndexChanged += (s, e) =>
+            {
+                btnInstallExclusive.Enabled = lvExclusives.SelectedItems.Count > 0;
+                UpdatePreviewImage(pbExclusivesPreview, lvExclusives.SelectedItems.Count > 0 ? ((ExclusiveAddon)lvExclusives.SelectedItems[0].Tag).ImageUrl : null);
+            };
+
+            pbExclusivesPreview = new PictureBox { Left = 500, Top = 42, Width = 218, Height = 164, BorderStyle = BorderStyle.FixedSingle, BackColor = ModernPanel, SizeMode = PictureBoxSizeMode.Zoom };
+
+            btnInstallExclusive = new Button { Left = 12, Top = 360, Width = 160, Height = 30, Text = "Install Selected", FlatStyle = FlatStyle.Flat, BackColor = ModernAccent, ForeColor = Color.Black, Enabled = false };
+            btnInstallExclusive.Click += async (s, e) => await InstallSelectedExclusiveAsync();
+
+            tabExclusives.Controls.AddRange(new Control[] { lHint, btnRefreshExclusives, btnCheckExclusiveUpdates, lvExclusives, pbExclusivesPreview, btnInstallExclusive });
+            tabExclusives.BackColor = ModernBack;
+        }
+
+        private void UpdatePreviewImage(PictureBox target, string imageUrl)
+        {
+            target.Image = null;
+            if (string.IsNullOrWhiteSpace(imageUrl))
+                return;
+
+            var url = imageUrl;
+            Task.Run(async () =>
+            {
+                try
+                {
+                    using (var client = new HttpClient())
+                    {
+                        var bytes = await client.GetByteArrayAsync(url);
+                        using (var ms = new MemoryStream(bytes))
+                        {
+                            var image = Image.FromStream(ms);
+                            if (!IsDisposed)
+                                BeginInvoke(new Action(() => { if (!target.IsDisposed) target.Image = image; }));
+                        }
+                    }
+                }
+                catch
+                {
+                    // Best effort preview; leave the box blank on failure.
+                }
+            });
         }
 
         private async Task LoadCuratedCatalogAsync(bool forceRefresh = false)
@@ -188,7 +293,6 @@ namespace AAEmu.Launcher
                         var item = new ListViewItem(addon.Name) { Tag = addon };
                         item.SubItems.Add(addon.Category);
                         item.SubItems.Add(addon.Description);
-                        item.SubItems.Add(addon.Repo);
                         lvCatalog.Items.Add(item);
                     }
                     catalogLoaded = true;
@@ -206,6 +310,52 @@ namespace AAEmu.Launcher
             }
         }
 
+        private async Task LoadExclusiveCatalogAsync(bool forceRefresh = false)
+        {
+            if (exclusivesLoaded && !forceRefresh)
+                return;
+
+            SetBusy(true, "Fetching JWoW Exclusives list...");
+            try
+            {
+                using (var client = CreateGitHubClient())
+                {
+                    exclusiveCatalog = await AddonManager.FetchExclusiveCatalogAsync(client);
+                    RenderExclusivesList();
+                    exclusivesLoaded = true;
+                    lStatus.Text = $"Loaded {exclusiveCatalog.Addons.Count} JWoW Exclusive addons.";
+                }
+            }
+            catch (Exception ex)
+            {
+                lStatus.Text = "Failed to load JWoW Exclusives.";
+                MessageBox.Show(this, $"Could not fetch the JWoW Exclusives list:\n{ex.Message}", "Addon Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                SetBusy(false);
+            }
+        }
+
+        private void RenderExclusivesList()
+        {
+            lvExclusives.Items.Clear();
+            if (exclusiveCatalog == null)
+                return;
+
+            var installedFolders = new HashSet<string>(
+                (manifest?.Addons ?? new List<InstalledAddon>()).Where(a => a.IsExclusive).Select(a => a.ExclusiveFolder),
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var addon in exclusiveCatalog.Addons.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                var item = new ListViewItem(addon.Name) { Tag = addon };
+                item.SubItems.Add(addon.Description);
+                item.SubItems.Add(installedFolders.Contains(addon.Folder) ? "Installed" : string.Empty);
+                lvExclusives.Items.Add(item);
+            }
+        }
+
         private async Task InstallSelectedFromCatalogAsync()
         {
             if (lvCatalog.SelectedItems.Count == 0)
@@ -215,14 +365,149 @@ namespace AAEmu.Launcher
             await InstallAddonAsync(addon.Repo, addon.Name);
         }
 
+        private async Task InstallSelectedExclusiveAsync()
+        {
+            if (lvExclusives.SelectedItems.Count == 0)
+                return;
+
+            var addon = (ExclusiveAddon)lvExclusives.SelectedItems[0].Tag;
+            await InstallExclusiveAddonAsync(addon);
+        }
+
+        private async Task InstallExclusiveAddonAsync(ExclusiveAddon addon)
+        {
+            if (!EnsureAddOnsFolderReady())
+                return;
+
+            SetBusy(true, $"Installing {addon.Name}...");
+            try
+            {
+                using (var client = CreateGitHubClient())
+                {
+                    var (folders, version) = await AddonManager.InstallExclusiveAddonAsync(client, addon, addOnsPath, CancellationToken.None);
+
+                    manifest = AddonManager.LoadManifest(addOnsPath);
+                    manifest.Addons.RemoveAll(a => string.Equals(a.ExclusiveFolder, addon.Folder, StringComparison.OrdinalIgnoreCase));
+                    manifest.Addons.Add(new InstalledAddon
+                    {
+                        Name = addon.Name,
+                        Repo = addon.Repo,
+                        Version = version,
+                        Folders = folders,
+                        IsExclusive = true,
+                        ExclusiveFolder = addon.Folder
+                    });
+                    AddonManager.SaveManifest(addOnsPath, manifest);
+                }
+
+                RefreshAddonList();
+                RenderExclusivesList();
+                lStatus.Text = $"Installed {addon.Name}.";
+
+                if (addon.Recommends != null && addon.Recommends.Count > 0)
+                    ShowDependencyPrompt(addon);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Failed to install {addon.Name}:\n{ex.Message}", "Addon Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                lStatus.Text = "Install failed.";
+            }
+            finally
+            {
+                SetBusy(false);
+            }
+        }
+
+        private void ShowDependencyPrompt(ExclusiveAddon addon)
+        {
+            using (var prompt = new AddonDependencyPromptForm(addon.Name, addon.Recommends))
+            {
+                prompt.InstallRequested += async dep =>
+                {
+                    try
+                    {
+                        using (var client = CreateGitHubClient())
+                        {
+                            var folders = await AddonManager.InstallFromDirectZipAsync(client, dep.DownloadUrl, addOnsPath, CancellationToken.None);
+
+                            manifest = AddonManager.LoadManifest(addOnsPath);
+                            manifest.Addons.RemoveAll(a => string.Equals(a.Name, dep.Name, StringComparison.OrdinalIgnoreCase));
+                            manifest.Addons.Add(new InstalledAddon
+                            {
+                                Name = dep.Name,
+                                Repo = string.Empty,
+                                Version = "latest",
+                                Folders = folders
+                            });
+                            AddonManager.SaveManifest(addOnsPath, manifest);
+                            RefreshAddonList();
+                        }
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(this, $"Failed to install {dep.Name}:\n{ex.Message}", "Addon Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return false;
+                    }
+                };
+
+                prompt.ShowDialog(this);
+            }
+        }
+
+        private async Task CheckExclusiveUpdatesAsync()
+        {
+            if (exclusiveCatalog == null || manifest == null)
+                return;
+
+            var installedExclusives = manifest.Addons.Where(a => a.IsExclusive).ToList();
+            if (installedExclusives.Count == 0)
+            {
+                lStatus.Text = "No JWoW Exclusive addons installed yet.";
+                return;
+            }
+
+            SetBusy(true, "Checking JWoW Exclusives for updates...");
+            try
+            {
+                using (var client = CreateGitHubClient())
+                {
+                    foreach (var installed in installedExclusives)
+                    {
+                        var catalogEntry = exclusiveCatalog.Addons.FirstOrDefault(a => string.Equals(a.Folder, installed.ExclusiveFolder, StringComparison.OrdinalIgnoreCase));
+                        if (catalogEntry == null)
+                            continue;
+
+                        var result = await AddonManager.CheckExclusiveForUpdateAsync(client, installed, catalogEntry);
+                        var row = lvExclusives.Items.Cast<ListViewItem>().FirstOrDefault(i => ((ExclusiveAddon)i.Tag).Folder == catalogEntry.Folder);
+                        if (row != null)
+                            row.SubItems[2].Text = result.Error != null ? "Error" : result.UpdateAvailable ? $"Update: {result.LatestVersion}" : "Up to date";
+                    }
+                }
+                lStatus.Text = "Update check complete.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Failed to check for updates:\n{ex.Message}", "Addon Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                SetBusy(false);
+            }
+        }
+
         private void SetBusy(bool busy, string statusText = null)
         {
             pbProgress.Visible = busy;
             btnAddAddon.Enabled = !busy;
+            btnRefreshInstalled.Enabled = !busy;
             btnCheckUpdates.Enabled = !busy;
             btnBrowseFolder.Enabled = !busy;
             btnRefreshCatalog.Enabled = !busy;
             btnInstallFromCatalog.Enabled = !busy && lvCatalog.SelectedItems.Count > 0;
+            btnRefreshExclusives.Enabled = !busy;
+            btnCheckExclusiveUpdates.Enabled = !busy;
+            btnInstallExclusive.Enabled = !busy && lvExclusives.SelectedItems.Count > 0;
             UpdateActionButtonsEnabled(busy);
             if (statusText != null)
                 lStatus.Text = statusText;
@@ -237,7 +522,7 @@ namespace AAEmu.Launcher
 
         private void BtnBrowseFolder_Click(object sender, EventArgs e)
         {
-            using (var dialog = new FolderBrowserDialog { Description = "Select the WoW AddOns folder (Interface\\AddOns)" })
+            using (var dialog = new FolderBrowserDialog { Description = "Select the WoW AddOns folder (interface\\addons)" })
             {
                 if (!string.IsNullOrWhiteSpace(addOnsPath) && Directory.Exists(addOnsPath))
                     dialog.SelectedPath = addOnsPath;
@@ -251,6 +536,7 @@ namespace AAEmu.Launcher
             }
         }
 
+        /// <summary>Loads the manifest and reconciles it against what's actually on disk, so manually-dropped-in addons show up too.</summary>
         private void RefreshAddonList()
         {
             lvAddons.Items.Clear();
@@ -261,15 +547,21 @@ namespace AAEmu.Launcher
             }
 
             manifest = AddonManager.LoadManifest(addOnsPath);
+            manifest = AddonManager.ScanAndReconcile(addOnsPath, manifest);
+            AddonManager.SaveManifest(addOnsPath, manifest);
+
             foreach (var addon in manifest.Addons.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase))
             {
                 var item = new ListViewItem(addon.Name) { Tag = addon };
-                item.SubItems.Add(addon.Repo);
+                item.SubItems.Add(addon.IsExclusive ? "JWoW Exclusive" : string.IsNullOrEmpty(addon.Repo) ? "(found on disk)" : addon.Repo);
                 item.SubItems.Add(addon.Version);
-                item.SubItems.Add("Installed");
+                item.SubItems.Add(addon.FoundOnDisk ? "Found on disk" : "Installed");
                 lvAddons.Items.Add(item);
             }
-            lStatus.Text = manifest.Addons.Count == 0 ? "No addons installed yet." : $"{manifest.Addons.Count} addon(s) installed.";
+            lStatus.Text = manifest.Addons.Count == 0 ? "No addons found." : $"{manifest.Addons.Count} addon(s) found.";
+
+            if (exclusivesLoaded)
+                RenderExclusivesList();
         }
 
         private bool EnsureAddOnsFolderReady()
@@ -365,6 +657,9 @@ namespace AAEmu.Launcher
                     foreach (ListViewItem item in lvAddons.Items)
                     {
                         var addon = (InstalledAddon)item.Tag;
+                        if (addon.IsExclusive || string.IsNullOrEmpty(addon.Repo))
+                            continue; // exclusives are checked from their own tab; disk-only finds have no known source
+
                         var result = await AddonManager.CheckForUpdateAsync(client, addon);
                         item.SubItems[3].Text = result.Error != null
                             ? "Error"
@@ -396,13 +691,29 @@ namespace AAEmu.Launcher
                 {
                     foreach (var addon in selectedAddons)
                     {
-                        lStatus.Text = $"Updating {addon.Name}...";
-                        var (downloadUrl, version) = await AddonManager.ResolveDownloadAsync(client, addon.Repo);
-                        var zipPath = await AddonManager.DownloadZipAsync(client, downloadUrl, Path.Combine(Path.GetTempPath(), "aaemu_addon_dl"), null, CancellationToken.None);
-                        var folders = await Task.Run(() => AddonManager.ExtractAddon(zipPath, addOnsPath));
+                        if (string.IsNullOrEmpty(addon.Repo))
+                            continue;
 
-                        addon.Version = version;
-                        addon.Folders = folders;
+                        lStatus.Text = $"Updating {addon.Name}...";
+                        if (addon.IsExclusive)
+                        {
+                            var catalogEntry = exclusiveCatalog?.Addons.FirstOrDefault(a => string.Equals(a.Folder, addon.ExclusiveFolder, StringComparison.OrdinalIgnoreCase));
+                            if (catalogEntry == null)
+                                continue;
+
+                            var (folders, version) = await AddonManager.InstallExclusiveAddonAsync(client, catalogEntry, addOnsPath, CancellationToken.None);
+                            addon.Version = version;
+                            addon.Folders = folders;
+                        }
+                        else
+                        {
+                            var (downloadUrl, version) = await AddonManager.ResolveDownloadAsync(client, addon.Repo);
+                            var zipPath = await AddonManager.DownloadZipAsync(client, downloadUrl, Path.Combine(Path.GetTempPath(), "aaemu_addon_dl"), null, CancellationToken.None);
+                            var folders = await Task.Run(() => AddonManager.ExtractAddon(zipPath, addOnsPath));
+
+                            addon.Version = version;
+                            addon.Folders = folders;
+                        }
                     }
 
                     AddonManager.SaveManifest(addOnsPath, manifest);
