@@ -41,7 +41,7 @@
     <StartupObject>AAEmu.Launcher.Program</StartupObject>
   </PropertyGroup>
   <PropertyGroup>
-    <ApplicationIcon>aaemu.ico</ApplicationIcon>
+    <ApplicationIcon>jason-games-launcher.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup>
     <TargetZone>LocalIntranet</TargetZone>
@@ -250,7 +250,7 @@
     <None Include="Res\GitHub_Logo_Only_Active.png" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="aaemu.ico" />
+    <Content Include="jason-games-launcher.ico" />
     <None Include="Res\flag_se_sv.png" />
     <None Include="lng\se_sv.lng">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -317,7 +317,7 @@
       <Visible>False</Visible>
       <Description>AAEmu Launcher Config File</Description>
       <Progid>aaemu.launcher.config</Progid>
-      <DefaultIcon>aaemu.ico</DefaultIcon>
+      <DefaultIcon>jason-games-launcher.ico</DefaultIcon>
     </FileAssociation>
   </ItemGroup>
   <ItemGroup>
