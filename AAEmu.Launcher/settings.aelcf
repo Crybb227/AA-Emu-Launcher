@@ -10,6 +10,7 @@
   "aa30DownloadLocation": "https://drive.google.com/file/d/1KQE-OIgGaOSqr69MufLe8R6odaIK8nit/view",
   "wowPath": "",
   "wowDownloadLocation": "https://btground.dedyn.io/chmi/additional_patches_for_335a.zip",
+  "wowStatusUrl": "http://localhost:8787/api/launcher/status",
   "serverIPAddress": "127.0.0.1",
   "saveLoginAndPassword": true,
   "skipIntro": false,

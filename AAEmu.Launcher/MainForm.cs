@@ -49,6 +49,7 @@ namespace AAEmu.Launcher
             public const string DefaultAAClientDownloadLocation = "https://github.com/Crybb227/AA-Emu-Client-AA";
             public const string DefaultAA30ClientDownloadLocation = "https://drive.google.com/file/d/1KQE-OIgGaOSqr69MufLe8R6odaIK8nit/view";
             public const string DefaultWoWClientDownloadLocation = "https://btground.dedyn.io/chmi/additional_patches_for_335a.zip";
+            public const string DefaultWoWStatusUrl = "http://localhost:8787/api/launcher/status";
             public const string LegacyAAClientGoogleDriveLocation = "https://drive.google.com/drive/folders/1_pIBVHIm1YFal-nteGaVuXjTv3Yrsv4Q";
 
             [JsonProperty("configVersion", NullValueHandling = NullValueHandling.Ignore)]
@@ -86,6 +87,9 @@ namespace AAEmu.Launcher
 
             [JsonProperty("wowAddOnsPath", NullValueHandling = NullValueHandling.Ignore)]
             public string WoWAddOnsPath { get; set; } = string.Empty;
+
+            [JsonProperty("wowStatusUrl", NullValueHandling = NullValueHandling.Ignore)]
+            public string WoWStatusUrl { get; set; } = DefaultWoWStatusUrl;
 
             [JsonProperty("serverIPAddress", NullValueHandling = NullValueHandling.Ignore)]
             public string ServerIpAddress { get; set; } = "127.0.0.1";
@@ -162,6 +166,7 @@ namespace AAEmu.Launcher
                 setting.AA30DownloadLocation = DefaultAA30ClientDownloadLocation;
                 setting.WoWPath = "";
                 setting.WoWDownloadLocation = DefaultWoWClientDownloadLocation;
+                setting.WoWStatusUrl = DefaultWoWStatusUrl;
                 setting.ServerIpAddress = "127.0.0.1";
                 setting.SaveLoginAndPassword = false;
                 setting.SkipIntro = false;
@@ -480,7 +485,7 @@ namespace AAEmu.Launcher
         public static string localPatchPakFileName = "download.patch";
         public static string launcherProtocolSchema = "aelcf";
         public static string urlAAEmuGitHub = "https://github.com/AAEmu/AAEmu";
-        public static string urlLauncherGitHub = "https://github.com/ZeromusXYZ/AAEmu-Launcher";
+        public static string urlLauncherGitHub = "https://github.com/Crybb227/AA-Emu-Launcher";
         public static string urlAAEmuDiscordInvite = "https://discord.gg/vn8E8E6";
         public static string urlLauncherDiscordInvite = "https://discord.gg/GhVfDtK";
         public static string urlWebsite = "https://github.com/AAEmu/AAEmu"; // "https://aaemu.info/";
@@ -561,7 +566,9 @@ namespace AAEmu.Launcher
         private Label lHeroNewsBody;
         private bool isCloseButtonHot = false;
         private bool isMinimizeButtonHot = false;
-        private string selectedGameId = "aa";
+        private string selectedGameId = "jw";
+        private bool gameFieldsLoaded;
+        private Image gameSplash;
         private bool isClientDeltaUpdating = false;
 
 
@@ -574,6 +581,8 @@ namespace AAEmu.Launcher
         private void ApplyModernTheme()
         {
             Text = "Jason Games Launcher";
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            DoubleBuffered = true;
             ClientSize = new Size(1280, 720);
             CenterToScreen();
             BackColor = ModernBack;
@@ -612,6 +621,7 @@ namespace AAEmu.Launcher
             };
 
             CreateBattleNetShellControls();
+            InitializeDashboard();
 
             Controls.Add(lBrandTitle);
             Controls.Add(lBrandSubtitle);
@@ -627,7 +637,7 @@ namespace AAEmu.Launcher
             StyleTextBox(eLogin);
             StyleTextBox(ePassword);
             StyleTextBox(eServerIP);
-            cbLoginList.BackColor = Color.FromArgb(26, 20, 13);
+            cbLoginList.BackColor = WowTheme.PanelAlt;
             cbLoginList.ForeColor = ModernText;
             cbLoginList.Font = new Font("Segoe UI", 9F);
 
@@ -648,7 +658,7 @@ namespace AAEmu.Launcher
                 StyleCheckBoxLabel(label, ModernAccent, 13F);
 
             lNewsFeed.Image = null;
-            lNewsFeed.BackColor = Color.FromArgb(30, 24, 15);
+            lNewsFeed.BackColor = WowTheme.Panel;
             lNewsFeed.ForeColor = ModernText;
             lNewsFeed.Font = new Font("Segoe UI", 10F);
             lNewsFeed.Padding = new Padding(12);
@@ -659,9 +669,9 @@ namespace AAEmu.Launcher
             btnWebsite.Image = null;
             ConfigureWindowButton(btnMinimize);
             ConfigureWindowButton(btnClose);
-            StyleCommandLabel(btnSettings, Color.FromArgb(48, 38, 24), ModernText, 9F);
-            StyleCommandLabel(btnWebsite, Color.FromArgb(48, 38, 24), ModernText, 9F);
-            StyleCommandLabel(lSettingsBack, Color.FromArgb(48, 38, 24), ModernText, 11F);
+            StyleCommandLabel(btnSettings, WowTheme.Panel, ModernText, 9F);
+            StyleCommandLabel(btnWebsite, WowTheme.Panel, ModernText, 9F);
+            StyleCommandLabel(lSettingsBack, WowTheme.Panel, ModernText, 11F);
             StyleCommandLabel(lDownloadLauncherUpdate, Color.Transparent, WowTheme.AccentHot, 10F);
 
             pPatchSteps.BackColor = Color.Transparent;
@@ -680,7 +690,9 @@ namespace AAEmu.Launcher
             pgbFrontTotal.BackColor = ModernAccent;
 
             lAppVersion.ForeColor = ModernMutedText;
+            lAppVersion.Visible = false;
             lLoadedConfig.ForeColor = ModernAccent;
+            lLoadedConfig.Visible = false;
             lLoadedConfig.Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
             lDownloadLauncherUpdate.ForeColor = WowTheme.AccentHot;
             lAppVersion.Location = new Point(28, 674);
@@ -698,17 +710,23 @@ namespace AAEmu.Launcher
             StyleContextMenu(cmsAuthType);
 
             LayoutBattleNetShell();
+            LayoutDashboard();
             ApplyModernPlayButton(serverCheckStatus, false);
         }
 
         private void CreateBattleNetShellControls()
         {
-            pGameHeader = new Panel
+            pGameHeader = new PresentationPanel
             {
-                BackColor = Color.FromArgb(18, 14, 9),
+                BackColor = WowTheme.Back,
                 Location = new Point(0, 0),
                 Size = new Size(ClientSize.Width, 122),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            };
+            pGameHeader.Paint += (sender, args) =>
+            {
+                using (var brush = new SolidBrush(WowTheme.Accent))
+                    args.Graphics.FillRectangle(brush, GameIndicator);
             };
             pGameHeader.MouseDown += LauncherForm_MouseDown;
             pGameHeader.MouseMove += LauncherForm_MouseMove;
@@ -720,19 +738,23 @@ namespace AAEmu.Launcher
             lLogo.ForeColor = WowTheme.AccentHot;
             lLogo.Size = new Size(270, 40);
             lLogo.TextAlign = ContentAlignment.MiddleLeft;
-            lGameArcheAge = CreateGameIcon("AA v1.2", new Point(144, 64), true);
+            lGameArcheAge = CreateGameIcon("AA v1.2", new Point(182, 64), false);
             lGameArcheAge.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold, GraphicsUnit.Point, 0);
             lGameArcheAge.Size = new Size(72, 44);
             lGameArcheAge.Click += (s, e) => SelectLauncherGame("aa");
-            lGameArcheAge30 = CreateGameIcon("AA v3.0.3", new Point(226, 64), false);
+            lGameArcheAge30 = CreateGameIcon("AA v3.0.3", new Point(274, 64), false);
             lGameArcheAge30.Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold, GraphicsUnit.Point, 0);
             lGameArcheAge30.Size = new Size(86, 44);
             lGameArcheAge30.Click += (s, e) => SelectLauncherGame("aa30");
-            lGameJasonWoW = CreateGameIcon("JW", new Point(322, 64), false);
+            lGameJasonWoW = CreateGameIcon("JasonWoW", new Point(28, 60), true);
+            lGameJasonWoW.Size = new Size(138, 52);
             lGameJasonWoW.Click += (s, e) => SelectLauncherGame("jw");
-            lGamePlaceholder = CreateGameIcon("+", new Point(388, 64), false);
+            lGamePlaceholder = CreateGameIcon("+", new Point(382, 64), false);
+            lGamePlaceholder.Visible = false;
 
             pGameHeader.Controls.Add(lLogo);
+            btnSettings.Parent = pGameHeader;
+            btnWebsite.Parent = pGameHeader;
             pGameHeader.Controls.Add(lGameArcheAge);
             pGameHeader.Controls.Add(lGameArcheAge30);
             pGameHeader.Controls.Add(lGameJasonWoW);
@@ -754,7 +776,7 @@ namespace AAEmu.Launcher
             lClientUpdateAction = new Label
             {
                 AutoSize = false,
-                BackColor = Color.FromArgb(48, 38, 24),
+                BackColor = WowTheme.Panel,
                 Cursor = Cursors.Hand,
                 ForeColor = ModernText,
                 Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold, GraphicsUnit.Point, 0),
@@ -768,7 +790,7 @@ namespace AAEmu.Launcher
             lAddons = new Label
             {
                 AutoSize = false,
-                BackColor = Color.FromArgb(48, 38, 24),
+                BackColor = WowTheme.Panel,
                 Cursor = Cursors.Hand,
                 ForeColor = ModernText,
                 Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold, GraphicsUnit.Point, 0),
@@ -807,7 +829,7 @@ namespace AAEmu.Launcher
             eDownloadLocation = new TextBox
             {
                 BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Color.FromArgb(26, 20, 13),
+                BackColor = WowTheme.PanelAlt,
                 ForeColor = ModernText,
                 Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point, 0)
             };
@@ -828,12 +850,16 @@ namespace AAEmu.Launcher
 
             lInstallStatus.BringToFront();
             lClientUpdateAction.BringToFront();
-            SelectLauncherGame(selectedGameId);
+            SelectLauncherGame(selectedGameId, false);
         }
 
-        private void SelectLauncherGame(string gameId)
+        private void SelectLauncherGame(string gameId, bool saveCurrentFields = true)
         {
-            SaveSelectedGameFields();
+            if (gameId != "jw" && gameId != "aa" && gameId != "aa30")
+                throw new ArgumentOutOfRangeException(nameof(gameId));
+            if (saveCurrentFields)
+                SaveSelectedGameFields();
+            ChangeGameSplash(gameId);
             selectedGameId = gameId;
             var isAa = selectedGameId == "aa";
             var isAa30 = selectedGameId == "aa30";
@@ -852,12 +878,13 @@ namespace AAEmu.Launcher
                 ? "AA v3.0.3 - Trion - r318414 - 2016-12-08 is selected."
                 : isAa
                     ? "Install, patch, and launch private server clients from one place."
-                    : "JasonWoW is selected.";
+                    : "Your world awaits.\n\nManage addons, keep your client ready, and enter JasonWoW.";
             ApplySelectedGameToLegacySettings();
             LoadSelectedGameFields();
             UpdateInstallStatus();
             UpdatePlayButton(serverCheckStatus, false);
             ShowPanelControls(currentPanel);
+            UpdateDashboardForSelectedGame();
             Invalidate(true);
         }
 
@@ -868,7 +895,7 @@ namespace AAEmu.Launcher
             get
             {
                 if (selectedGameId == "jw")
-                    return "WoW";
+                    return "JasonWoW";
                 if (selectedGameId == "aa30")
                     return "AA v3.0.3";
                 return "AA v1.2";
@@ -1031,7 +1058,7 @@ namespace AAEmu.Launcher
 
         private void SaveSelectedGameFields()
         {
-            if (lGamePath == null || eDownloadLocation == null)
+            if (!gameFieldsLoaded || lGamePath == null || eDownloadLocation == null)
                 return;
 
             SetSelectedGamePath(lGamePath.Text.Trim());
@@ -1047,6 +1074,7 @@ namespace AAEmu.Launcher
             lDownloadLocationLabel.Text = SelectedGameDisplayName + " Download Location";
             lGamePath.Text = GetSelectedGamePath();
             eDownloadLocation.Text = GetSelectedDownloadLocation();
+            gameFieldsLoaded = true;
             if (selectedGameId == "jw")
                 lGameClientType.Text = "JasonWoW";
             else if (selectedGameId == "aa30")
@@ -1060,7 +1088,7 @@ namespace AAEmu.Launcher
 
         private void SetGameIconSelected(Label label, bool selected)
         {
-            label.BackColor = selected ? Color.FromArgb(52, 42, 26) : Color.Transparent;
+            label.BackColor = selected ? WowTheme.Panel : Color.Transparent;
             label.BorderStyle = selected ? BorderStyle.FixedSingle : BorderStyle.None;
             label.ForeColor = selected ? WowTheme.AccentHot : WowTheme.MutedText;
         }
@@ -1070,7 +1098,7 @@ namespace AAEmu.Launcher
             return new Label
             {
                 AutoSize = false,
-                BackColor = selected ? Color.FromArgb(52, 42, 26) : Color.Transparent,
+                BackColor = selected ? WowTheme.Panel : Color.Transparent,
                 BorderStyle = selected ? BorderStyle.FixedSingle : BorderStyle.None,
                 Cursor = Cursors.Hand,
                 ForeColor = selected ? WowTheme.AccentHot : WowTheme.MutedText,
@@ -1150,21 +1178,23 @@ namespace AAEmu.Launcher
             lAddonUpdateBadge.Size = new Size(242, 20);
             lHeroTitle.Location = new Point(28, 178);
             lHeroTitle.Size = new Size(242, 72);
-            lHeroTitle.Font = new Font("Segoe UI Semibold", 20F, FontStyle.Bold, GraphicsUnit.Point, 0);
-            btnSettings.Location = new Point(900, 154);
+            lHeroTitle.Font = new Font("Palatino Linotype", 26F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            btnSettings.Location = new Point(1040, 76);
             btnSettings.Size = new Size(96, 32);
-            btnWebsite.Location = new Point(1004, 154);
+            btnWebsite.Location = new Point(1144, 76);
             btnWebsite.Size = new Size(96, 32);
-            lHeroNewsTitle.Location = new Point(900, 204);
+            lHeroNewsTitle.Location = new Point(900, 554);
             lHeroNewsTitle.Size = new Size(300, 32);
-            lHeroNewsBody.Location = new Point(900, 236);
-            lHeroNewsBody.Size = new Size(300, 152);
+            lHeroNewsBody.Location = new Point(900, 590);
+            lHeroNewsBody.Size = new Size(300, 100);
 
-            lNewsFeed.Location = new Point(318, 190);
-            lNewsFeed.Size = new Size(540, 286);
-            imgBigNews.Location = new Point(318, 190);
-            imgBigNews.Size = new Size(540, 286);
-            lBigNewsImage.Location = new Point(318, 482);
+            lNewsFeed.Location = new Point(318, 554);
+            lNewsFeed.Size = new Size(540, 140);
+            imgBigNews.Location = new Point(318, 554);
+            imgBigNews.Size = new Size(540, 140);
+            wbNews.Location = lNewsFeed.Location;
+            wbNews.Size = lNewsFeed.Size;
+            lBigNewsImage.Location = new Point(318, 696);
             lBigNewsImage.Size = new Size(540, 24);
 
             pgbBackTotal.Location = new Point(318, 280);
@@ -1214,7 +1244,7 @@ namespace AAEmu.Launcher
 
         private void StyleTextBox(TextBox textBox)
         {
-            textBox.BackColor = Color.FromArgb(26, 20, 13);
+            textBox.BackColor = WowTheme.PanelAlt;
             textBox.BorderStyle = BorderStyle.FixedSingle;
             textBox.ForeColor = ModernText;
             textBox.Font = new Font("Segoe UI", 12.5F);
@@ -1229,7 +1259,7 @@ namespace AAEmu.Launcher
 
         private void StylePathValueLabel(Label label)
         {
-            label.BackColor = Color.FromArgb(26, 20, 13);
+            label.BackColor = WowTheme.PanelAlt;
             label.BorderStyle = BorderStyle.FixedSingle;
             label.ForeColor = ModernText;
             label.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point, 0);
@@ -1240,7 +1270,7 @@ namespace AAEmu.Launcher
         // Gives the settings checkboxes a visible box outline, since a bare checkmark glyph is easy to miss
         private void StyleCheckBoxLabel(Label label, Color foreColor, float size)
         {
-            label.BackColor = Color.FromArgb(26, 20, 13);
+            label.BackColor = WowTheme.PanelAlt;
             label.ForeColor = foreColor;
             label.Font = new Font("Segoe UI", size, FontStyle.Bold, GraphicsUnit.Point, 0);
             label.BorderStyle = BorderStyle.FixedSingle;
@@ -1278,7 +1308,7 @@ namespace AAEmu.Launcher
 
             if (isHot)
             {
-                var hoverColor = isClose ? WowTheme.Danger : Color.FromArgb(48, 38, 24);
+                var hoverColor = isClose ? WowTheme.Danger : WowTheme.Panel;
                 using (var brush = new SolidBrush(hoverColor))
                     e.Graphics.FillRectangle(brush, button.ClientRectangle);
             }
@@ -1301,31 +1331,26 @@ namespace AAEmu.Launcher
 
         private void StyleContextMenu(ContextMenuStrip menu)
         {
-            menu.BackColor = Color.FromArgb(30, 24, 15);
+            menu.BackColor = WowTheme.Panel;
             menu.ForeColor = ModernText;
             menu.RenderMode = ToolStripRenderMode.System;
         }
 
         private void LauncherForm_Paint(object sender, PaintEventArgs e)
         {
-            using (var backBrush = new LinearGradientBrush(ClientRectangle, Color.FromArgb(12, 9, 5), Color.FromArgb(28, 22, 13), 45F))
+            using (var backBrush = new LinearGradientBrush(ClientRectangle, WowTheme.Back, Color.FromArgb(38, 29, 48), 90F))
                 e.Graphics.FillRectangle(backBrush, ClientRectangle);
-
-            using (var leftBrush = new SolidBrush(Color.FromArgb(42, 24, 19, 12)))
-                e.Graphics.FillRectangle(leftBrush, new Rectangle(0, 122, 296, ClientSize.Height - 122));
-            using (var heroBrush = new LinearGradientBrush(new Rectangle(296, 122, 984, 410), Color.FromArgb(50, 40, 24), Color.FromArgb(22, 17, 10), 0F))
-                e.Graphics.FillRectangle(heroBrush, new Rectangle(296, 122, 984, 410));
-            using (var cardBrush = new SolidBrush(Color.FromArgb(220, 36, 29, 18)))
-                e.Graphics.FillRectangle(cardBrush, new Rectangle(880, 190, 340, 286));
-            using (var headerLine = new SolidBrush(WowTheme.Accent))
+            PaintGameSplash(e.Graphics, SplashBounds);
+            using (var leftBrush = new SolidBrush(Color.FromArgb(235, WowTheme.PanelAlt)))
+                e.Graphics.FillRectangle(leftBrush, new Rectangle(0, Px(122), Px(296), ClientSize.Height - Px(122)));
+            if (currentPanel == ShowPanelType.Login)
             {
-                var indicator = selectedGameId == "aa30"
-                    ? new Rectangle(226, 119, 86, 3)
-                    : selectedGameId == "jw"
-                        ? new Rectangle(322, 119, 56, 3)
-                        : new Rectangle(144, 119, 72, 3);
-                e.Graphics.FillRectangle(headerLine, indicator);
+                using (var cardBrush = new SolidBrush(Color.FromArgb(230, WowTheme.Panel)))
+                    e.Graphics.FillRectangle(cardBrush, new Rectangle(Px(880), Px(548), Px(340), Px(154)));
+                using (var border = new Pen(Color.FromArgb(80, WowTheme.Accent)))
+                    e.Graphics.DrawRectangle(border, new Rectangle(Px(880), Px(548), Px(340), Px(154)));
             }
+
         }
 
         private void ModernPanel_Paint(object sender, PaintEventArgs e)
@@ -1334,18 +1359,18 @@ namespace AAEmu.Launcher
             if (currentPanel == ShowPanelType.Settings)
             {
                 using (var mainBrush = new SolidBrush(ModernPanel))
-                    e.Graphics.FillRectangle(mainBrush, new Rectangle(296, 146, 732, 522));
+                    e.Graphics.FillRectangle(mainBrush, new Rectangle(Px(296), Px(146), Px(732), Px(522)));
                 using (var borderPen = new Pen(WowTheme.Border))
-                    e.Graphics.DrawRectangle(borderPen, new Rectangle(296, 146, 732, 522));
+                    e.Graphics.DrawRectangle(borderPen, new Rectangle(Px(296), Px(146), Px(732), Px(522)));
                 return;
             }
 
             if (currentPanel == ShowPanelType.UpdatePatch)
             {
                 using (var mainBrush = new SolidBrush(ModernPanel))
-                    e.Graphics.FillRectangle(mainBrush, new Rectangle(296, 184, 732, 322));
+                    e.Graphics.FillRectangle(mainBrush, new Rectangle(Px(296), Px(184), Px(732), Px(322)));
                 using (var borderPen = new Pen(WowTheme.Border))
-                    e.Graphics.DrawRectangle(borderPen, new Rectangle(296, 184, 732, 322));
+                    e.Graphics.DrawRectangle(borderPen, new Rectangle(Px(296), Px(184), Px(732), Px(322)));
             }
         }
 
@@ -1361,9 +1386,10 @@ namespace AAEmu.Launcher
             if (!IsGameInstalled())
                 buttonColor = isMouseOver ? Color.FromArgb(220, 180, 90) : Color.FromArgb(180, 145, 75);
 
-            StyleCommandLabel(btnPlay, buttonColor, Color.FromArgb(15, 11, 6), 24F);
+            StyleCommandLabel(btnPlay, buttonColor, Color.FromArgb(15, 11, 6), IsGameInstalled() ? 22F : 15F);
             btnPlay.Image = null;
             btnPlay.FlatStyle = FlatStyle.Flat;
+            btnPlay.Font = new Font("Palatino Linotype", IsGameInstalled() ? 22F : 15F, FontStyle.Bold);
         }
 
         private void InitDefaultLanguage()
@@ -1560,11 +1586,12 @@ namespace AAEmu.Launcher
             ePassword.Visible = showLoginCredentials;
             lLogin.Visible = showLoginCredentials;
             lPassword.Visible = showLoginCredentials;
-            lNewsFeed.Visible = ((panelID == ShowPanelType.Login) || (panelID == ShowPanelType.UpdatePatch));
-            imgBigNews.Visible = (panelID == ShowPanelType.Login);
+            lNewsFeed.Visible = IsArcheAgeSelected && !string.IsNullOrWhiteSpace(Setting.ServerNewsFeedURL) &&
+                ((panelID == ShowPanelType.Login) || (panelID == ShowPanelType.UpdatePatch));
+            imgBigNews.Visible = IsArcheAgeSelected && hasGameNewsImage && (panelID == ShowPanelType.Login);
             cbLoginList.Visible = showLoginCredentials && (cbLoginList.Items.Count > 0);
-            lBigNewsImage.Visible = ((panelID == ShowPanelType.Login) && (lBigNewsImage.Tag != null) && (lBigNewsImage.Tag.ToString() != ""));
-            wbNews.Visible = (((panelID == ShowPanelType.Login) || (panelID == ShowPanelType.UpdatePatch)) && (wbNews.Tag != null) && (wbNews.Tag.ToString() == "1"));
+            lBigNewsImage.Visible = IsArcheAgeSelected && ((panelID == ShowPanelType.Login) && (lBigNewsImage.Tag != null) && (lBigNewsImage.Tag.ToString() != ""));
+            wbNews.Visible = IsArcheAgeSelected && (((panelID == ShowPanelType.Login) || (panelID == ShowPanelType.UpdatePatch)) && (wbNews.Tag != null) && (wbNews.Tag.ToString() == "1"));
             lPatchProgressBarText.Visible = (panelID == ShowPanelType.UpdatePatch);
             pgbBackTotal.Visible = (panelID == ShowPanelType.UpdatePatch);
             pgbFrontTotal.Visible = (panelID == ShowPanelType.UpdatePatch);
@@ -1635,13 +1662,17 @@ namespace AAEmu.Launcher
             lClientUpdateAction.BringToFront();
             lAddons.BringToFront();
             lAddonUpdateBadge.BringToFront();
-            lClientUpdateAction.Visible = showHome;
-            lInstallStatus.Visible = showHome;
-            lAddons.Visible = showHome && selectedGameId == "jw";
+            // Replaced on the home screen by the compact dashboard controls. These legacy
+            // controls remain wired for compatibility with update/install code paths.
+            lClientUpdateAction.Visible = false;
+            lInstallStatus.Visible = false;
+            lAddons.Visible = false;
+            lAddonUpdateBadge.Visible = false;
             UpdateAddonUpdateBadgeVisibility();
             UpdateInstallStatus();
 
             currentPanel = panelID;
+            UpdateDashboardForSelectedGame();
             Invalidate(true);
         }
 
@@ -1714,9 +1745,15 @@ namespace AAEmu.Launcher
             fixBin32StripMenuItem.Text = L.TSFixBin32;
 
             lDownloadLauncherUpdate.Text = string.Format(L.DownloadLauncherUpdate, LauncherUpdateVersion);
+            if (lLauncherUpdateCompact != null)
+            {
+                lLauncherUpdateCompact.Text = "Launcher update " + LauncherUpdateVersion + " available";
+                lLauncherUpdateCompact.Visible = currentPanel == ShowPanelType.Login && !string.IsNullOrWhiteSpace(LauncherUpdateVersion);
+            }
             lDownloadClient.Text = "Install Game";
             LoadSelectedGameFields();
             UpdateInstallStatus();
+            UpdateDashboardForSelectedGame();
 
             troubleshootGameToolStripMenuItem.Text = L.TroubleshootGame;
             troubleshootLauncherToolStripMenuItem.Text = L.TroubleshootLauncher;
@@ -1847,6 +1884,8 @@ namespace AAEmu.Launcher
                 AppVersion = "0.0.0.0";
             }
             lAppVersion.Text = "V " + AppVersion;
+            if (lLauncherVersionCompact != null)
+                lLauncherVersionCompact.Text = "Launcher " + AppVersion;
 
             // Default install working folder is C:\ArcheAge\Working
             DefaultGameWorkingDirectory = Path.Combine(Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.System)), "ArcheAge", "Working");
@@ -1892,6 +1931,10 @@ namespace AAEmu.Launcher
                     }
                 }
             }
+
+            // Explicit server shortcuts continue to target ArcheAge.
+            if (AppOpenMode == LauncherOpenMode.SpecifiedConfigFile || AppOpenMode == LauncherOpenMode.OpenServerURI)
+                SelectLauncherGame("aa", false);
 
             // Load the saved clients reference file
             LoadClientLookup();
@@ -2009,6 +2052,8 @@ namespace AAEmu.Launcher
                 Setting.AA30DownloadLocation = LauncherFileSettings.DefaultAA30ClientDownloadLocation;
             if (string.IsNullOrWhiteSpace(Setting.WoWDownloadLocation))
                 Setting.WoWDownloadLocation = LauncherFileSettings.DefaultWoWClientDownloadLocation;
+            if (string.IsNullOrWhiteSpace(Setting.WoWStatusUrl))
+                Setting.WoWStatusUrl = LauncherFileSettings.DefaultWoWStatusUrl;
 
             if ((GetAAPath() == "") || (!File.Exists(GetAAPath())) || IsInDefaultLocation(GetAAPath()))
             {
@@ -2051,6 +2096,9 @@ namespace AAEmu.Launcher
             DoAutoLaunch = Setting.AutoLaunch;
 
             UpdatePanelLabels();
+            if (selectedGameId == "jw")
+                _ = CheckExclusiveAddonUpdatesAsync();
+            ApplyPresentationDpi(DeviceDpi);
         }
 
         private bool IsGameInstalled()
@@ -2681,6 +2729,9 @@ namespace AAEmu.Launcher
 
         private void btnPlay_Click(object sender, EventArgs e)
         {
+            if (IsSelectedGameRunning() || isClientDeltaUpdating || serverCheckStatus == serverCheck.Updating)
+                return;
+
             if (!IsGameInstalled())
             {
                 lDownloadClient_Click(sender, e);
@@ -2736,14 +2787,7 @@ namespace AAEmu.Launcher
 
         private void btnWebsite_Click(object sender, EventArgs e)
         {
-            if ((Setting.ServerWebSiteURL != null) && (Setting.ServerWebSiteURL != ""))
-            {
-                Process.Start(Setting.ServerWebSiteURL);
-            }
-            else
-            {
-                Process.Start(urlWebsite);
-            }
+            Process.Start(new ProcessStartInfo(urlLauncherGitHub) { UseShellExecute = true });
         }
 
         private void LauncherForm_BackgroundImageChanged(object sender, EventArgs e)
@@ -3021,7 +3065,7 @@ namespace AAEmu.Launcher
 
                 if (!IsArcheAgeSelected)
                 {
-                    MessageBox.Show(this, "Set a WoW Download Location URL before installing JasonWoW.", "Install", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(this, "Set a JasonWoW Download Location URL before installing JasonWoW.", "Install", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
@@ -3138,6 +3182,7 @@ namespace AAEmu.Launcher
                     WorkingDirectory = Path.GetDirectoryName(exePath),
                     UseShellExecute = true
                 });
+                jasonWoWProcess = startedProcess;
                 WindowState = FormWindowState.Minimized;
 
                 if (selectedGameId == "jw")
@@ -3182,7 +3227,7 @@ namespace AAEmu.Launcher
         {
             var installRoot = Path.GetDirectoryName(exePath);
             if (string.IsNullOrWhiteSpace(installRoot))
-                throw new InvalidOperationException("Could not determine the WoW install location.");
+                throw new InvalidOperationException("Could not determine the JasonWoW install location.");
 
             var dataFolder = Path.Combine(installRoot, "data");
             var localeFolder = Path.Combine(dataFolder, "enus");
@@ -3210,7 +3255,7 @@ namespace AAEmu.Launcher
                 serverAddress = serverAddress.Substring(0, splitPos);
 
             if (string.IsNullOrWhiteSpace(serverAddress))
-                throw new InvalidOperationException("Set a server address before launching WoW.");
+                throw new InvalidOperationException("Set a server address before launching JasonWoW.");
 
             return serverAddress;
         }
@@ -3234,8 +3279,9 @@ namespace AAEmu.Launcher
             var visible = selectedGameId == "jw" && pendingExclusiveAddonUpdates > 0 && lAddons.Visible;
             lAddonUpdateBadge.Visible = visible;
             lAddonUpdateBadge.Text = pendingExclusiveAddonUpdates == 1
-                ? "1 JWoW Exclusive update available"
-                : $"{pendingExclusiveAddonUpdates} JWoW Exclusive updates available";
+                ? "1 JasonWoW Exclusive update available"
+                : $"{pendingExclusiveAddonUpdates} JasonWoW Exclusive updates available";
+            UpdateAddonSummary();
         }
 
         /// <summary>Background check of installed JWoW Exclusive addons against the exclusives repo, surfaced as a badge under Manage Addons.</summary>
@@ -3248,7 +3294,10 @@ namespace AAEmu.Launcher
                     return;
 
                 var manifest = AddonManager.LoadManifest(addOnsPath);
-                var installedExclusives = manifest.Addons.Where(a => a.IsExclusive).ToList();
+                // Chatter has no meaningful "version" of its own, so it's excluded from update checks.
+                var installedExclusives = manifest.Addons
+                    .Where(a => a.IsExclusive && !string.Equals(a.ExclusiveFolder, "Chatter", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
                 if (installedExclusives.Count == 0)
                     return;
 
@@ -3328,6 +3377,7 @@ namespace AAEmu.Launcher
             {
                 isClientDeltaUpdating = true;
                 lClientUpdateAction.Text = "Checking...";
+                UpdateClientStatusSummary();
                 UpdateInstallStatus();
 
                 var plan = await ClientDeltaUpdater.CheckForUpdatesAsync(downloadLocation, gamePath);
@@ -3348,6 +3398,9 @@ namespace AAEmu.Launcher
                 var progress = new Progress<ClientDeltaProgress>(p =>
                 {
                     lInstallStatus.Text = $"Updating {p.CurrentFile}/{p.TotalFiles}\n{p.FileName}";
+                    var percent = p.TotalFiles <= 0 ? 0 : (int)Math.Round(p.CurrentFile * 100D / p.TotalFiles);
+                    lClientStatus.Text = "↻ Updating  " + percent + "%";
+                    btnPlay.Text = "UPDATING  " + percent + "%";
                 });
 
                 await ClientDeltaUpdater.ApplyUpdateAsync(downloadLocation, gamePath, plan, progress);
@@ -3363,6 +3416,7 @@ namespace AAEmu.Launcher
                 lClientUpdateAction.Text = "Check Client Updates";
                 UpdateInstallStatus();
                 UpdatePlayButton(serverCheckStatus, false);
+                UpdateClientStatusSummary();
             }
         }
 
@@ -3730,18 +3784,30 @@ namespace AAEmu.Launcher
         {
             if (!IsGameInstalled())
             {
-                btnPlay.Text = "Install";
+                btnPlay.Text = "INSTALL / LOCATE GAME";
+                btnPlay.Enabled = true;
                 btnPlay.Cursor = Cursors.Hand;
                 ApplyModernPlayButton(serverState, isMouseOver);
                 return;
             }
+
+            if (IsSelectedGameRunning())
+            {
+                btnPlay.Text = "PLAYING";
+                btnPlay.Enabled = false;
+                btnPlay.Cursor = Cursors.No;
+                ApplyModernPlayButton(serverState, false);
+                return;
+            }
+
+            btnPlay.Enabled = serverState != serverCheck.Updating && !(selectedGameId == "jw" && serverState == serverCheck.Offline);
 
             if (isMouseOver == true)
             {
                 switch (serverState)
                 {
                     case serverCheck.Offline: // offline
-                        btnPlay.Text = L.Offline;
+                        btnPlay.Text = selectedGameId == "jw" ? "SERVER OFFLINE" : L.Offline;
                         break;
                     case serverCheck.Online: // Play
                         btnPlay.Text = L.Play;
@@ -3750,7 +3816,7 @@ namespace AAEmu.Launcher
                         btnPlay.Text = L.Update;
                         break;
                     case serverCheck.Updating: // Updating
-                        btnPlay.Text = L.Updating;
+                        btnPlay.Text = "UPDATING";
                         break;
                     case serverCheck.Unknown: // Play
                     default:
@@ -3763,7 +3829,7 @@ namespace AAEmu.Launcher
                 switch (serverState)
                 {
                     case serverCheck.Offline: // offline
-                        btnPlay.Text = L.Offline;
+                        btnPlay.Text = selectedGameId == "jw" ? "SERVER OFFLINE" : L.Offline;
                         break;
                     case serverCheck.Online:
                         btnPlay.Text = L.Play;
@@ -3772,7 +3838,7 @@ namespace AAEmu.Launcher
                         btnPlay.Text = L.Update;
                         break;
                     case serverCheck.Updating: // Updating
-                        btnPlay.Text = L.Updating;
+                        btnPlay.Text = "UPDATING";
                         break;
                     case serverCheck.Unknown:
                     default:
@@ -3800,6 +3866,8 @@ namespace AAEmu.Launcher
             urlLauncherUpdateDownload = "";
             LauncherUpdateVersion = "";
             pendingLauncherUpdate = null;
+            if (lLauncherUpdateCompact != null)
+                lLauncherUpdateCompact.Visible = false;
             try
             {
                 var updateInfo = await GitHubReleaseUpdater.CheckForUpdateAsync(launcherUpdateRepo, AppVersion);
@@ -3811,7 +3879,12 @@ namespace AAEmu.Launcher
                 urlLauncherUpdateDownload = updateInfo.ReleaseUrl;
 
                 lDownloadLauncherUpdate.Text = string.Format(L.DownloadLauncherUpdate, LauncherUpdateVersion);
-                lDownloadLauncherUpdate.Visible = true;
+                lDownloadLauncherUpdate.Visible = false;
+                if (lLauncherUpdateCompact != null)
+                {
+                    lLauncherUpdateCompact.Text = "Launcher update " + LauncherUpdateVersion + " available";
+                    lLauncherUpdateCompact.Visible = currentPanel == ShowPanelType.Login;
+                }
             }
             catch
             {
@@ -3824,6 +3897,7 @@ namespace AAEmu.Launcher
         private void timerGeneral_Tick(object sender, EventArgs e)
         {
             StopDiscordPresenceIfGameExited();
+            UpdateRunningState();
 
             if ((aaLauncher != null) && (aaLauncher.RunningProcess != null) && (checkGameIsRunning == true))
             {
@@ -4121,6 +4195,12 @@ namespace AAEmu.Launcher
                 bigNewsIndex = 0;
                 bigNewsTimer = 1000 * 10 * 1; // 10 seconds
             }
+            if (newsFeed.Data != null && newsFeed.Data.Count > 0)
+            {
+                bigNewsIndex = Math.Max(0, bigNewsIndex);
+                UpdateHeroNewsCard(newsFeed.Data[bigNewsIndex]);
+                RefreshHeroNewsNavigation();
+            }
         }
 
         private Image LoadImageForNews(AAEmuNewsFeedDataItem newsItem)
@@ -4159,27 +4239,34 @@ namespace AAEmu.Launcher
             return img;
         }
 
+        private bool hasGameNewsImage;
+
         private void LoadBigNews(AAEmuNewsFeedDataItem newsItem)
         {
+            UpdateHeroNewsCard(newsItem);
+            RefreshHeroNewsNavigation();
             Application.UseWaitCursor = true;
+            hasGameNewsImage = false;
             try
             {
                 var img = LoadImageForNews(newsItem);
                 if (img != null)
                 {
+                    hasGameNewsImage = true;
+                    imgBigNews.Visible = IsArcheAgeSelected && currentPanel == ShowPanelType.Login;
                     imgBigNews.Image = img;
                     imgBigNews.SizeMode = PictureBoxSizeMode.Zoom;
 
                     lBigNewsImage.Text = newsItem.ItemAttributes.ItemTitle;
                     lBigNewsImage.Tag = newsItem.ItemAttributes.ItemLinks.Self;
-                    lBigNewsImage.Visible = (currentPanel == ShowPanelType.Login);
+                    lBigNewsImage.Visible = IsArcheAgeSelected && (currentPanel == ShowPanelType.Login);
                 }
                 else
                 {
                     lBigNewsImage.Tag = "";
                     lBigNewsImage.Visible = false;
                     imgBigNews.Image = Properties.Resources.bignews_default;
-                    imgBigNews.Visible = (currentPanel == ShowPanelType.Login);
+                    imgBigNews.Visible = false;
                 }
             }
             catch
@@ -4187,14 +4274,14 @@ namespace AAEmu.Launcher
                 lBigNewsImage.Tag = "";
                 lBigNewsImage.Visible = false;
                 imgBigNews.Image = Properties.Resources.bignews_default;
-                imgBigNews.Visible = (currentPanel == ShowPanelType.Login);
+                imgBigNews.Visible = false;
             }
             Application.UseWaitCursor = false;
         }
 
         private void wbNews_DocumentCompleted(object sender, WebBrowserDocumentCompletedEventArgs e)
         {
-            wbNews.Visible = (currentPanel == ShowPanelType.Login);
+            wbNews.Visible = IsArcheAgeSelected && (currentPanel == ShowPanelType.Login);
             wbNews.Tag = "1"; // We use this it indicate if we need to show/hide the browser when swapping panels
         }
 
@@ -4305,6 +4392,8 @@ namespace AAEmu.Launcher
         private void bgwServerStatusCheck_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
             UpdatePlayButton(serverCheckStatus, false);
+            ApplyRealmDetails(realmDetails);
+            _ = RefreshRealmDetailsAsync(false);
         }
 
         private List<AAPakFileInfo> CreateXlFileListFromStream(Stream aStream)

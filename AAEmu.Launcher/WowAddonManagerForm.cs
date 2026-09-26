@@ -37,6 +37,7 @@ namespace AAEmu.Launcher
         private Button btnCheckUpdates;
         private Button btnUpdateSelected;
         private Button btnRemoveSelected;
+        private Label lInstalledHint;
 
         // Browse tab
         private readonly TabPage tabBrowse;
@@ -45,6 +46,7 @@ namespace AAEmu.Launcher
         private Button btnRefreshCatalog;
         private Button btnInstallFromCatalog;
         private bool catalogLoaded;
+        private Label lBrowseHint;
 
         // JWoW Exclusives tab
         private readonly TabPage tabExclusives;
@@ -55,9 +57,13 @@ namespace AAEmu.Launcher
         private Button btnCheckExclusiveUpdates;
         private bool exclusivesLoaded;
         private ExclusiveAddonCatalog exclusiveCatalog;
+        private Label lExclusivesHint;
 
         private readonly Label lStatus;
         private readonly ProgressBar pbProgress;
+        private readonly Label lInstalledSummary;
+        private readonly Label lManagedSummary;
+        private readonly Label lUpdatesSummary;
 
         private string addOnsPath;
         private AddonManifest manifest;
@@ -68,31 +74,51 @@ namespace AAEmu.Launcher
         {
             addOnsPath = initialAddOnsPath ?? string.Empty;
 
-            Text = "WoW Addon Manager";
-            ClientSize = new Size(780, 620);
-            FormBorderStyle = FormBorderStyle.FixedDialog;
+            Text = "JasonWoW Addon Manager";
+            AutoScaleMode = AutoScaleMode.Dpi;
+            ClientSize = new Size(960, 720);
+            MinimumSize = new Size(780, 620);
+            FormBorderStyle = FormBorderStyle.Sizable;
             StartPosition = FormStartPosition.CenterParent;
-            MaximizeBox = false;
+            MaximizeBox = true;
             MinimizeBox = false;
             BackColor = ModernBack;
             ForeColor = ModernText;
             Font = new Font("Segoe UI", 9.5F);
 
-            var lFolderLabel = new Label { Left = 16, Top = 14, Width = 100, Height = 24, Text = "AddOns folder:", ForeColor = ModernMutedText };
-            eAddonsFolder = new TextBox { Left = 16, Top = 38, Width = 620, Height = 26, ReadOnly = true, BackColor = ModernPanel, ForeColor = ModernText, BorderStyle = BorderStyle.FixedSingle, Text = addOnsPath };
-            btnBrowseFolder = new Button { Left = 644, Top = 37, Width = 120, Height = 26, Text = "Browse...", FlatStyle = FlatStyle.Flat };
+            var lTitle = new Label { Left = 16, Top = 12, Width = 720, Height = 44, Text = "JasonWoW Addons", ForeColor = ModernText, Font = new Font("Palatino Linotype", 20F, FontStyle.Bold), AutoEllipsis = true };
+            var lSubtitle = new Label { Left = 18, Top = 53, Width = 760, Height = 24, Text = "Manage, discover, and update your interface without leaving the launcher.", ForeColor = ModernMutedText, AutoEllipsis = true };
+            lInstalledSummary = CreateSummaryLabel(16, "0 INSTALLED");
+            lManagedSummary = CreateSummaryLabel(266, "0 MANAGED");
+            lUpdatesSummary = CreateSummaryLabel(516, "UPDATES NOT CHECKED");
+
+            var lFolderLabel = new Label { Left = 16, Top = 112, Width = 150, Height = 22, Text = "GAME ADDONS LOCATION", ForeColor = ModernMutedText, Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold) };
+            eAddonsFolder = new TextBox { Left = 16, Top = 134, Width = 620, Height = 28, ReadOnly = true, BackColor = ModernPanel, ForeColor = ModernText, BorderStyle = BorderStyle.FixedSingle, Text = addOnsPath };
+            btnBrowseFolder = new Button { Left = 644, Top = 133, Width = 120, Height = 29, Text = "Change...", FlatStyle = FlatStyle.Flat };
             btnBrowseFolder.Click += BtnBrowseFolder_Click;
 
-            tabs = new TabControl { Left = 16, Top = 72, Width = 748, Height = 444 };
+            tabs = new TabControl
+            {
+                Left = 16, Top = 174, Width = 748, Height = 438,
+                DrawMode = TabDrawMode.OwnerDrawFixed,
+                SizeMode = TabSizeMode.Fixed,
+                ItemSize = new Size(190, 34),
+                Padding = new Point(14, 5)
+            };
+            tabs.DrawItem += Tabs_DrawItem;
 
             tabInstalled = new TabPage("Installed");
             tabBrowse = new TabPage("Browse Popular Addons");
-            tabExclusives = new TabPage("JWoW Exclusives");
+            tabExclusives = new TabPage("JasonWoW Exclusives");
+            tabInstalled.UseVisualStyleBackColor = false;
+            tabBrowse.UseVisualStyleBackColor = false;
+            tabExclusives.UseVisualStyleBackColor = false;
             tabs.TabPages.Add(tabInstalled);
             tabs.TabPages.Add(tabBrowse);
             tabs.TabPages.Add(tabExclusives);
             tabs.SelectedIndexChanged += (s, e) =>
             {
+                LayoutResponsive();
                 if (tabs.SelectedTab == tabBrowse && !catalogLoaded)
                     _ = LoadCuratedCatalogAsync();
                 else if (tabs.SelectedTab == tabExclusives && !exclusivesLoaded)
@@ -103,17 +129,143 @@ namespace AAEmu.Launcher
             BuildBrowseTab();
             BuildExclusivesTab();
 
-            lStatus = new Label { Left = 16, Top = 524, Width = 748, Height = 20, Text = string.Empty, ForeColor = ModernMutedText };
-            pbProgress = new ProgressBar { Left = 16, Top = 546, Width = 748, Height = 18, Style = ProgressBarStyle.Marquee, Visible = false };
+            lStatus = new Label { Left = 16, Top = 620, Width = 748, Height = 22, Text = string.Empty, ForeColor = ModernMutedText };
+            pbProgress = new ProgressBar { Left = 16, Top = 646, Width = 748, Height = 8, Style = ProgressBarStyle.Marquee, Visible = false };
 
             Controls.AddRange(new Control[]
             {
+                lTitle, lSubtitle, lInstalledSummary, lManagedSummary, lUpdatesSummary,
                 lFolderLabel, eAddonsFolder, btnBrowseFolder,
                 tabs,
                 lStatus, pbProgress
             });
 
-            Load += (s, e) => RefreshAddonList();
+            StyleAllButtons(this);
+
+            Load += (s, e) => { LayoutResponsive(); RefreshAddonList(); };
+            Resize += (s, e) => LayoutResponsive();
+        }
+
+        private Label CreateSummaryLabel(int left, string text)
+        {
+            return new Label
+            {
+                Left = left, Top = 78, Width = 232, Height = 27, Text = text,
+                BackColor = ModernPanel, ForeColor = ModernAccent,
+                Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+        }
+
+        private void Tabs_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            bool selected = e.Index == tabs.SelectedIndex;
+            var bounds = e.Bounds;
+            using (var background = new SolidBrush(selected ? ModernPanel : ModernBack))
+                e.Graphics.FillRectangle(background, bounds);
+            if (selected)
+            {
+                using (var accent = new SolidBrush(ModernAccent))
+                    e.Graphics.FillRectangle(accent, bounds.Left, bounds.Bottom - 3, bounds.Width, 3);
+            }
+            TextRenderer.DrawText(e.Graphics, tabs.TabPages[e.Index].Text, Font, bounds,
+                selected ? ModernText : ModernMutedText,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+
+        private void StyleAllButtons(Control parent)
+        {
+            foreach (Control control in parent.Controls)
+            {
+                if (control is Button button)
+                {
+                    button.FlatStyle = FlatStyle.Flat;
+                    button.FlatAppearance.BorderColor = WowTheme.Border;
+                    button.FlatAppearance.MouseOverBackColor = WowTheme.PanelAlt;
+                    button.FlatAppearance.MouseDownBackColor = Color.FromArgb(72, 57, 34);
+                    button.Cursor = Cursors.Hand;
+                }
+                if (control.HasChildren) StyleAllButtons(control);
+            }
+        }
+
+        private void LayoutResponsive()
+        {
+            if (tabs == null || lStatus == null || ClientSize.Width < 1 || ClientSize.Height < 1)
+                return;
+
+            const int margin = 16;
+            const int gap = 8;
+            int contentWidth = ClientSize.Width - margin * 2;
+            int cardWidth = Math.Max(150, (contentWidth - gap * 2) / 3);
+            lInstalledSummary.SetBounds(margin, 82, cardWidth, 30);
+            lManagedSummary.SetBounds(margin + cardWidth + gap, 82, cardWidth, 30);
+            lUpdatesSummary.SetBounds(margin + (cardWidth + gap) * 2, 82,
+                contentWidth - (cardWidth + gap) * 2, 30);
+
+            btnBrowseFolder.SetBounds(ClientSize.Width - margin - 122, 140, 122, 30);
+            eAddonsFolder.SetBounds(margin, 140, btnBrowseFolder.Left - margin - gap, 30);
+            tabs.SetBounds(margin, 182, contentWidth, Math.Max(360, ClientSize.Height - 252));
+            lStatus.SetBounds(margin, ClientSize.Height - 58, contentWidth, 24);
+            pbProgress.SetBounds(margin, ClientSize.Height - 28, contentWidth, 8);
+
+            LayoutInstalledTab();
+            LayoutBrowseTab();
+            LayoutExclusivesTab();
+        }
+
+        private void LayoutInstalledTab()
+        {
+            if (tabInstalled == null || tabInstalled.ClientSize.Width < 100) return;
+            int width = tabInstalled.ClientSize.Width, height = tabInstalled.ClientSize.Height;
+            const int margin = 12, gap = 8;
+            int checkWidth = 118, refreshWidth = 90, installWidth = 90;
+            btnCheckUpdates.SetBounds(width - margin - checkWidth, 34, checkWidth, 29);
+            btnRefreshInstalled.SetBounds(btnCheckUpdates.Left - gap - refreshWidth, 34, refreshWidth, 29);
+            btnAddAddon.SetBounds(btnRefreshInstalled.Left - gap - installWidth, 34, installWidth, 29);
+            eRepoUrl.SetBounds(margin, 34, Math.Max(160, btnAddAddon.Left - margin - gap), 29);
+
+            int actionTop = height - 58;
+            btnUpdateSelected.SetBounds(margin, actionTop, 150, 32);
+            btnRemoveSelected.SetBounds(margin + 158, actionTop, 150, 32);
+            lInstalledHint.SetBounds(margin + 322, actionTop + 2, Math.Max(120, width - margin * 2 - 322), 34);
+            lvAddons.SetBounds(margin, 74, width - margin * 2, Math.Max(170, actionTop - 84));
+            int listWidth = Math.Max(400, lvAddons.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 4);
+            lvAddons.Columns[0].Width = (int)(listWidth * .31);
+            lvAddons.Columns[1].Width = (int)(listWidth * .34);
+            lvAddons.Columns[2].Width = (int)(listWidth * .15);
+            lvAddons.Columns[3].Width = listWidth - lvAddons.Columns[0].Width - lvAddons.Columns[1].Width - lvAddons.Columns[2].Width;
+        }
+
+        private void LayoutBrowseTab()
+        {
+            if (tabBrowse == null || tabBrowse.ClientSize.Width < 100) return;
+            int width = tabBrowse.ClientSize.Width, height = tabBrowse.ClientSize.Height;
+            const int margin = 12, gap = 10;
+            btnRefreshCatalog.SetBounds(width - margin - 104, 8, 104, 29);
+            lBrowseHint.SetBounds(margin, 10, Math.Max(150, btnRefreshCatalog.Left - margin - gap), 24);
+            int previewWidth = Math.Max(210, width / 3);
+            int listWidth = width - margin * 2 - gap - previewWidth;
+            int listHeight = Math.Max(190, height - 112);
+            lvCatalog.SetBounds(margin, 46, listWidth, listHeight);
+            pbCatalogPreview.SetBounds(margin + listWidth + gap, 46, previewWidth, Math.Min(210, listHeight));
+            btnInstallFromCatalog.SetBounds(margin, height - 54, 170, 32);
+        }
+
+        private void LayoutExclusivesTab()
+        {
+            if (tabExclusives == null || tabExclusives.ClientSize.Width < 100) return;
+            int width = tabExclusives.ClientSize.Width, height = tabExclusives.ClientSize.Height;
+            const int margin = 12, gap = 10;
+            btnCheckExclusiveUpdates.SetBounds(width - margin - 124, 8, 124, 29);
+            btnRefreshExclusives.SetBounds(btnCheckExclusiveUpdates.Left - gap - 104, 8, 104, 29);
+            lExclusivesHint.SetBounds(margin, 10, Math.Max(130, btnRefreshExclusives.Left - margin - gap), 24);
+            int previewWidth = Math.Max(210, width / 3);
+            int listWidth = width - margin * 2 - gap - previewWidth;
+            int listHeight = Math.Max(190, height - 112);
+            lvExclusives.SetBounds(margin, 46, listWidth, listHeight);
+            pbExclusivesPreview.SetBounds(margin + listWidth + gap, 46, previewWidth, Math.Min(210, listHeight));
+            btnInstallExclusive.SetBounds(margin, height - 54, 170, 32);
         }
 
         private void BuildInstalledTab()
@@ -152,7 +304,7 @@ namespace AAEmu.Launcher
             btnRemoveSelected = new Button { Left = 160, Top = 360, Width = 140, Height = 30, Text = "Remove Selected", FlatStyle = FlatStyle.Flat, ForeColor = ModernDanger };
             btnRemoveSelected.Click += BtnRemoveSelected_Click;
 
-            var lHint = new Label
+            lInstalledHint = new Label
             {
                 Left = 12,
                 Top = 398,
@@ -163,13 +315,13 @@ namespace AAEmu.Launcher
                 Font = new Font("Segoe UI", 8F)
             };
 
-            tabInstalled.Controls.AddRange(new Control[] { lRepoLabel, eRepoUrl, btnAddAddon, btnRefreshInstalled, btnCheckUpdates, lvAddons, btnUpdateSelected, btnRemoveSelected, lHint });
+            tabInstalled.Controls.AddRange(new Control[] { lRepoLabel, eRepoUrl, btnAddAddon, btnRefreshInstalled, btnCheckUpdates, lvAddons, btnUpdateSelected, btnRemoveSelected, lInstalledHint });
             tabInstalled.BackColor = ModernBack;
         }
 
         private void BuildBrowseTab()
         {
-            var lHint = new Label { Left = 12, Top = 10, Width = 460, Height = 24, Text = "Popular WotLK 3.3.5 addons, fetched live from GitHub.", ForeColor = ModernMutedText };
+            lBrowseHint = new Label { Left = 12, Top = 10, Width = 460, Height = 24, Text = "Popular WotLK 3.3.5 addons, fetched live from GitHub.", ForeColor = ModernMutedText };
             btnRefreshCatalog = new Button { Left = 618, Top = 8, Width = 100, Height = 26, Text = "Refresh", FlatStyle = FlatStyle.Flat };
             btnRefreshCatalog.Click += async (s, e) => await LoadCuratedCatalogAsync(forceRefresh: true);
 
@@ -214,13 +366,13 @@ namespace AAEmu.Launcher
             btnInstallFromCatalog = new Button { Left = 12, Top = 360, Width = 160, Height = 30, Text = "Install Selected", FlatStyle = FlatStyle.Flat, BackColor = ModernAccent, ForeColor = Color.Black, Enabled = false };
             btnInstallFromCatalog.Click += async (s, e) => await InstallSelectedFromCatalogAsync();
 
-            tabBrowse.Controls.AddRange(new Control[] { lHint, btnRefreshCatalog, lvCatalog, pbCatalogPreview, btnInstallFromCatalog });
+            tabBrowse.Controls.AddRange(new Control[] { lBrowseHint, btnRefreshCatalog, lvCatalog, pbCatalogPreview, btnInstallFromCatalog });
             tabBrowse.BackColor = ModernBack;
         }
 
         private void BuildExclusivesTab()
         {
-            var lHint = new Label { Left = 12, Top = 10, Width = 460, Height = 24, Text = "Custom addons built for JasonWoW.", ForeColor = ModernMutedText };
+            lExclusivesHint = new Label { Left = 12, Top = 10, Width = 460, Height = 24, Text = "Custom addons built for JasonWoW.", ForeColor = ModernMutedText };
             btnRefreshExclusives = new Button { Left = 496, Top = 8, Width = 100, Height = 26, Text = "Refresh", FlatStyle = FlatStyle.Flat };
             btnRefreshExclusives.Click += async (s, e) => await LoadExclusiveCatalogAsync(forceRefresh: true);
             btnCheckExclusiveUpdates = new Button { Left = 602, Top = 8, Width = 116, Height = 26, Text = "Check Updates", FlatStyle = FlatStyle.Flat };
@@ -267,7 +419,7 @@ namespace AAEmu.Launcher
             btnInstallExclusive = new Button { Left = 12, Top = 360, Width = 160, Height = 30, Text = "Install Selected", FlatStyle = FlatStyle.Flat, BackColor = ModernAccent, ForeColor = Color.Black, Enabled = false };
             btnInstallExclusive.Click += async (s, e) => await InstallSelectedExclusiveAsync();
 
-            tabExclusives.Controls.AddRange(new Control[] { lHint, btnRefreshExclusives, btnCheckExclusiveUpdates, lvExclusives, pbExclusivesPreview, btnInstallExclusive });
+            tabExclusives.Controls.AddRange(new Control[] { lExclusivesHint, btnRefreshExclusives, btnCheckExclusiveUpdates, lvExclusives, pbExclusivesPreview, btnInstallExclusive });
             tabExclusives.BackColor = ModernBack;
         }
 
@@ -339,7 +491,7 @@ namespace AAEmu.Launcher
             if (exclusivesLoaded && !forceRefresh)
                 return;
 
-            SetBusy(true, "Fetching JWoW Exclusives list...");
+            SetBusy(true, "Fetching JasonWoW Exclusives list...");
             try
             {
                 using (var client = CreateGitHubClient())
@@ -347,13 +499,13 @@ namespace AAEmu.Launcher
                     exclusiveCatalog = await AddonManager.FetchExclusiveCatalogAsync(client);
                     RenderExclusivesList();
                     exclusivesLoaded = true;
-                    lStatus.Text = $"Loaded {exclusiveCatalog.Addons.Count} JWoW Exclusive addons.";
+                    lStatus.Text = $"Loaded {exclusiveCatalog.Addons.Count} JasonWoW Exclusive addons.";
                 }
             }
             catch (Exception ex)
             {
-                lStatus.Text = "Failed to load JWoW Exclusives.";
-                MessageBox.Show(this, $"Could not fetch the JWoW Exclusives list:\n{ex.Message}", "Addon Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                lStatus.Text = "Failed to load JasonWoW Exclusives.";
+                MessageBox.Show(this, $"Could not fetch the JasonWoW Exclusives list:\n{ex.Message}", "Addon Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -498,14 +650,18 @@ namespace AAEmu.Launcher
             if (exclusiveCatalog == null || manifest == null)
                 return;
 
-            var installedExclusives = manifest.Addons.Where(a => a.IsExclusive).ToList();
+            // Chatter has no meaningful "version" of its own (it's just a UI for LLM chatter tone/traits),
+            // so it's excluded from update checks.
+            var installedExclusives = manifest.Addons
+                .Where(a => a.IsExclusive && !string.Equals(a.ExclusiveFolder, "Chatter", StringComparison.OrdinalIgnoreCase))
+                .ToList();
             if (installedExclusives.Count == 0)
             {
-                lStatus.Text = "No JWoW Exclusive addons installed yet.";
+                lStatus.Text = "No JasonWoW Exclusive addons installed yet.";
                 return;
             }
 
-            SetBusy(true, "Checking JWoW Exclusives for updates...");
+            SetBusy(true, "Checking JasonWoW Exclusives for updates...");
             try
             {
                 using (var client = CreateGitHubClient())
@@ -523,6 +679,7 @@ namespace AAEmu.Launcher
                     }
                 }
                 lStatus.Text = "Update check complete.";
+                UpdateSummaryCards();
             }
             catch (Exception ex)
             {
@@ -560,7 +717,7 @@ namespace AAEmu.Launcher
 
         private void BtnBrowseFolder_Click(object sender, EventArgs e)
         {
-            using (var dialog = new FolderBrowserDialog { Description = "Select the WoW AddOns folder (interface\\addons)" })
+            using (var dialog = new FolderBrowserDialog { Description = "Select the JasonWoW AddOns folder (interface\\addons)" })
             {
                 if (!string.IsNullOrWhiteSpace(addOnsPath) && Directory.Exists(addOnsPath))
                     dialog.SelectedPath = addOnsPath;
@@ -584,19 +741,20 @@ namespace AAEmu.Launcher
                 return;
             }
 
-            manifest = AddonManager.LoadManifest(addOnsPath);
-            manifest = AddonManager.ScanAndReconcile(addOnsPath, manifest);
+            manifest = AddonManager.GetInstalledAddons(addOnsPath);
             AddonManager.SaveManifest(addOnsPath, manifest);
 
             foreach (var addon in manifest.Addons.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase))
             {
                 var item = new ListViewItem(addon.Name) { Tag = addon };
-                item.SubItems.Add(addon.IsExclusive ? "JWoW Exclusive" : string.IsNullOrEmpty(addon.Repo) ? "(found on disk)" : addon.Repo);
+                item.SubItems.Add(addon.IsExclusive ? "JasonWoW Exclusive" : string.IsNullOrEmpty(addon.Repo) ? "(found on disk)" : addon.Repo);
                 item.SubItems.Add(addon.Version);
                 item.SubItems.Add(addon.FoundOnDisk ? "Found on disk" : "Installed");
                 lvAddons.Items.Add(item);
             }
-            lStatus.Text = manifest.Addons.Count == 0 ? "No addons found." : $"{manifest.Addons.Count} addon(s) found.";
+            lStatus.Text = manifest.Addons.Count == 0 ? "No addons found." : $"{manifest.Addons.Count} addon(s) installed.";
+            tabInstalled.Text = $"Installed ({manifest.Addons.Count})";
+            UpdateSummaryCards();
 
             if (exclusivesLoaded)
                 RenderExclusivesList();
@@ -606,7 +764,7 @@ namespace AAEmu.Launcher
         {
             if (string.IsNullOrWhiteSpace(addOnsPath))
             {
-                MessageBox.Show(this, "Select the WoW AddOns folder first.", "Addon Manager", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "Select the JasonWoW AddOns folder first.", "Addon Manager", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
 
@@ -620,6 +778,18 @@ namespace AAEmu.Launcher
                 MessageBox.Show(this, $"Could not access the AddOns folder:\n{ex.Message}", "Addon Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
+        }
+
+        private void UpdateSummaryCards()
+        {
+            var addons = manifest?.Addons ?? new List<InstalledAddon>();
+            int managed = addons.Count(a => !a.FoundOnDisk && (!string.IsNullOrWhiteSpace(a.Repo) || a.IsExclusive));
+            int updates = (lvAddons?.Items.Cast<ListViewItem>().Count(i => i.SubItems.Count > 3 && i.SubItems[3].Text.StartsWith("Update:", StringComparison.OrdinalIgnoreCase)) ?? 0)
+                + (lvExclusives?.Items.Cast<ListViewItem>().Count(i => i.SubItems.Count > 2 && i.SubItems[2].Text.StartsWith("Update:", StringComparison.OrdinalIgnoreCase)) ?? 0);
+            lInstalledSummary.Text = addons.Count + " INSTALLED";
+            lManagedSummary.Text = managed + " MANAGED";
+            lUpdatesSummary.Text = updates == 0 ? "NO KNOWN UPDATES" : updates + " UPDATE" + (updates == 1 ? string.Empty : "S");
+            lUpdatesSummary.ForeColor = updates > 0 ? WowTheme.AccentHot : ModernMutedText;
         }
 
         private async void BtnAddAddon_Click(object sender, EventArgs e)
@@ -705,6 +875,7 @@ namespace AAEmu.Launcher
                     }
                 }
                 lStatus.Text = "Update check complete.";
+                UpdateSummaryCards();
             }
             catch (Exception ex)
             {

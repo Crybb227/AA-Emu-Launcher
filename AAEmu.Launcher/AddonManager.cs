@@ -288,6 +288,18 @@ namespace AAEmu.Launcher
             return manifest;
         }
 
+        /// <summary>
+        /// Returns the same logical addon collection used by the manager UI. One addon may own
+        /// several folders, and Blizzard-provided folders are excluded, so callers must not use
+        /// a raw directory count when presenting an installed-addon total.
+        /// </summary>
+        public static AddonManifest GetInstalledAddons(string addOnsPath)
+        {
+            if (string.IsNullOrWhiteSpace(addOnsPath) || !Directory.Exists(addOnsPath))
+                return new AddonManifest();
+            return ScanAndReconcile(addOnsPath, LoadManifest(addOnsPath));
+        }
+
         public static string GetManifestPath(string addOnsPath)
         {
             return Path.Combine(addOnsPath, ManifestFileName);

@@ -15,6 +15,9 @@
         {
             if (disposing && (components != null))
             {
+                splashTransitionTimer?.Stop();
+                previousSplashFrame?.Dispose();
+                gameSplash?.Dispose();
                 components.Dispose();
             }
             base.Dispose(disposing);
@@ -30,7 +33,7 @@
         {
             this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(LauncherForm));
-            this.panelLoginAndPatch = new System.Windows.Forms.Panel();
+            this.panelLoginAndPatch = new PresentationPanel();
             this.pPatchSteps = new System.Windows.Forms.Panel();
             this.rbDownloadFiles = new System.Windows.Forms.RadioButton();
             this.rbInit = new System.Windows.Forms.RadioButton();
@@ -124,7 +127,7 @@
             this.btnDiscord = new System.Windows.Forms.PictureBox();
             this.btnGithub = new System.Windows.Forms.PictureBox();
             this.btnLauncherLangChange = new System.Windows.Forms.PictureBox();
-            this.panelSettings = new System.Windows.Forms.Panel();
+            this.panelSettings = new PresentationPanel();
             this.bgwNewsFeed = new System.ComponentModel.BackgroundWorker();
             this.bgwServerStatusCheck = new System.ComponentModel.BackgroundWorker();
             this.bgwPatcher = new System.ComponentModel.BackgroundWorker();
