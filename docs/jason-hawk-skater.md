@@ -149,7 +149,7 @@ Ship reviewed manifest/lifecycle/auth URLs and an optional Discord invite in
 `HawkSkater/deployment.json`. The checked-in default now uses the verified public
 download/attach gateway with no player sign-in. The configured game addresses are
 `24.16.12.90:13724` and `:18085`; the server is woken only through Discord.
-Launcher v0.6.0.2 is the publisher-authorized launcher release. External-PC,
+Launcher v0.6.0.3 is the publisher-authorized launcher release. External-PC,
 physical-controller/audio testing and the publisher's final third-party
 distribution review remain outstanding; release publication is not evidence
 that these acceptance checks have passed.
@@ -339,3 +339,6 @@ Installer tests also verified custom `skate-keyboard.toml` survives updates.
 Native key-event feel, typing/focus interaction and physical controller feel
 still need hands-on player acceptance. The publisher subsequently authorized
 the launcher `v0.6.0.2` tag/release without claiming these checks had passed.
+The v0.6.0.2 CI gate exposed a disabled-Windows-animation callback bug and
+prevented publication. v0.6.0.3 fixes it and adds a regression check; the failed
+v0.6.0.2 tag is retained without rewriting release history.

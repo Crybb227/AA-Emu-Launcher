@@ -119,6 +119,9 @@ class Check {
    Assert((float)Field(f,"splashTransitionProgress")==1,"transition completes");
    Assert((string)Field(f,"selectedGameId")=="jw","rapid switches settle on JWoW");
    Assert(Field(f,"splashTransitionTimer")==null || !((Timer)Field(f,"splashTransitionTimer")).Enabled,"transition timer stops when finished");
+   ((System.Diagnostics.Stopwatch)Field(f,"splashTransitionClock")).Reset();
+   Call(f,"AdvanceSplashTransition");
+   Assert((float)Field(f,"splashTransitionProgress")==1 && Field(f,"previousSplashFrame")==null,"disabled-animation or late timer callback remains complete");
    Assert(LauncherForm.urlLauncherGitHub=="https://github.com/Crybb227/AA-Emu-Launcher","Website repo destination");
    Call(f,"ShowPanelControls",LauncherForm.ShowPanelType.Settings);
    Save(f,"settings.png");

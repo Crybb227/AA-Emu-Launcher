@@ -122,6 +122,14 @@ namespace AAEmu.Launcher
 
         private void AdvanceSplashTransition()
         {
+            // With Windows animations disabled there is no snapshot or running
+            // clock. A late timer callback must not restart an empty transition.
+            if (previousSplashFrame == null)
+            {
+                splashTransitionProgress = 1;
+                splashTransitionTimer?.Stop();
+                return;
+            }
             float t = Math.Min(1, splashTransitionClock.ElapsedMilliseconds / 280f);
             splashTransitionProgress = t * t * (3 - 2 * t);
             if (t >= 1)
