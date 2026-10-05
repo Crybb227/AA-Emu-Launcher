@@ -36,7 +36,7 @@ namespace AAEmu.Launcher
         {
             get
             {
-                var tab = selectedGameId == "jw" ? lGameJasonWoW : selectedGameId == "aa30" ? lGameArcheAge30 : lGameArcheAge;
+                var tab = IsHawkSelected ? lGamePlaceholder : selectedGameId == "jw" ? lGameJasonWoW : selectedGameId == "aa30" ? lGameArcheAge30 : lGameArcheAge;
                 var target = new RectangleF(tab.Left, 119, tab.Width, 3);
                 float t = splashTransitionProgress;
                 return new RectangleF(previousGameIndicator.X + (target.X - previousGameIndicator.X) * t, Px(119),
@@ -135,7 +135,26 @@ namespace AAEmu.Launcher
 
         private void PaintGameSplash(Graphics graphics, Rectangle bounds)
         {
-            GameSplash.Paint(graphics, bounds, gameSplash, selectedGameId == "jw");
+            GameSplash.Paint(graphics, bounds, gameSplash, selectedGameId == "jw" || IsHawkSelected);
+            if (IsHawkSelected && gameSplash == null)
+            {
+                float scale = bounds.Width / 984F;
+                using (var title = new Font("Palatino Linotype", 34F * scale, FontStyle.Bold))
+                using (var subtitle = new Font("Segoe UI", 13F * scale))
+                using (var gold = new SolidBrush(WowTheme.AccentHot))
+                using (var muted = new SolidBrush(WowTheme.MutedText))
+                {
+                    graphics.DrawString("JasonHawkSkater", title, gold, bounds.Left + 60 * scale, bounds.Top + 96 * scale);
+                    graphics.DrawString("SKATE THROUGH AZEROTH", subtitle, muted, bounds.Left + 64 * scale, bounds.Top + 164 * scale);
+                }
+                using (var line = new Pen(Color.FromArgb(130, WowTheme.Accent), 3 * scale))
+                {
+                    graphics.DrawBezier(line, bounds.Left + 65 * scale, bounds.Top + 235 * scale, bounds.Left + 140 * scale, bounds.Top + 285 * scale,
+                        bounds.Left + 390 * scale, bounds.Top + 285 * scale, bounds.Left + 470 * scale, bounds.Top + 235 * scale);
+                    graphics.DrawEllipse(line, bounds.Left + 150 * scale, bounds.Top + 275 * scale, 18 * scale, 18 * scale);
+                    graphics.DrawEllipse(line, bounds.Left + 365 * scale, bounds.Top + 275 * scale, 18 * scale, 18 * scale);
+                }
+            }
             if (previousSplashFrame == null) return;
             using (var attributes = new ImageAttributes())
             {

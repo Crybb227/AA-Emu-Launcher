@@ -338,3 +338,5 @@ ASALocalRun/
 AAEmu.Launcher/data/img*.bin
 
 .publish/
+__pycache__/
+*.pyc

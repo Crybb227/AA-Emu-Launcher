@@ -1,0 +1,23 @@
+[Unit]
+Description=JasonHawkSkater attach-only player sessions (no server startup)
+After=network-online.target
+
+[Service]
+Type=simple
+User=hawkskater-download
+Group=hawkskater-download
+Environment=HAWK_LIFECYCLE_CONFIG=/etc/hawkskater/config.json
+ExecStart=/usr/bin/python3 /opt/hawkskater-download-broker/lifecycle_api.py
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+MemoryMax=256M
+TasksMax=96
+LimitNOFILE=256
+ReadWritePaths=/var/lib/hawkskater/sessions
+
+[Install]
+WantedBy=multi-user.target

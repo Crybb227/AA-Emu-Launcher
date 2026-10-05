@@ -55,6 +55,12 @@ jobs:
       - name: Build (Release)
         run: msbuild AAEmu-Launcher.sln /p:Configuration=Release /p:Platform="Any CPU" /m
 
+      - name: Verify launcher installation and presentation
+        shell: pwsh
+        run: |
+          ./scripts/Test-HawkNative.ps1
+          ./scripts/Test-LauncherPresentation.ps1
+
       - name: Generate portable ZIP
         shell: pwsh
         run: |
@@ -66,7 +72,8 @@ jobs:
           New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
           New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
 
-          Copy-Item -Path "$outDir/*" -Destination $packageDir -Recurse -Force
+          ./scripts/Install-JasonGamesLauncher.ps1 -BuildDirectory $outDir -Destination $packageDir -NoShortcut
+          Copy-Item docs/jason-hawk-skater.md (Join-Path $packageDir "JasonHawkSkater.md")
 
           @'
           @echo off
@@ -80,12 +87,15 @@ jobs:
           How to start:
           1. Extract this ZIP somewhere writable, such as your Desktop or Documents folder.
           2. Double-click "Start Launcher.bat".
-          3. Pick a game tab, open Settings if you want to change install paths or download URLs, then click Install or Play.
+          3. Pick a game tab, then click Install or Play. Settings lets you choose the installation folder.
 
           Notes:
           - Do not run the launcher directly from inside the ZIP. Extract it first.
           - Keep all files in this folder together.
           - The launcher includes the helper files it needs for client extraction.
+          - JasonHawkSkater runs natively on Windows x64 and installs its runtime/assets automatically.
+          - Start its server externally through the Discord helper; the launcher cannot wake it.
+          - Keyboard: W/S push/brake, A/D steer, hold/release Space ollie, arrows tricks, J board, K camera, R recover.
           - If Windows SmartScreen appears, choose More info, then Run anyway if you trust this release.
           "@ | Set-Content -Path (Join-Path $packageDir "README-FIRST.txt") -Encoding UTF8
 

@@ -1,0 +1,13 @@
+[package]
+name = "hawk-keyboard-tests"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace]
+
+[dependencies]
+bevy = { version = "0.18.1", default-features = false, features = ["default_app", "default_platform", "2d_bevy_render", "3d_bevy_render", "ui_api", "ui_bevy_render", "scene", "picking"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+skate-host = { git = "https://github.com/Kimmo3223/2010-rust-rewrite-mashup", rev = "2af41542901a1376ea40fa089ad99c751ceab077" }

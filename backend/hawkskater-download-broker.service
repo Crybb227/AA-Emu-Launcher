@@ -1,0 +1,25 @@
+[Unit]
+Description=JasonHawkSkater private release download broker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hawkskater-download
+Group=hawkskater-download
+EnvironmentFile=/etc/hawkskater-download-broker.env
+LoadCredential=github-read:/home/dml/.config/jason-games/github-read.token
+ExecStart=/usr/bin/python3 /opt/hawkskater-download-broker/download_broker.py
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+MemoryMax=512M
+TasksMax=96
+LimitNOFILE=256
+ReadWritePaths=/var/lib/hawkskater/download-cache
+
+[Install]
+WantedBy=multi-user.target

@@ -749,8 +749,10 @@ namespace AAEmu.Launcher
             lGameJasonWoW = CreateGameIcon("JasonWoW", new Point(28, 60), true);
             lGameJasonWoW.Size = new Size(138, 52);
             lGameJasonWoW.Click += (s, e) => SelectLauncherGame("jw");
-            lGamePlaceholder = CreateGameIcon("+", new Point(382, 64), false);
-            lGamePlaceholder.Visible = false;
+            lGamePlaceholder = CreateGameIcon("JasonHawkSkater", new Point(382, 64), false);
+            lGamePlaceholder.Size = new Size(196, 44);
+            lGamePlaceholder.Font = new Font("Segoe UI Semibold", 12F, FontStyle.Bold);
+            lGamePlaceholder.Click += (s, e) => SelectLauncherGame("hawk");
 
             pGameHeader.Controls.Add(lLogo);
             btnSettings.Parent = pGameHeader;
@@ -855,7 +857,7 @@ namespace AAEmu.Launcher
 
         private void SelectLauncherGame(string gameId, bool saveCurrentFields = true)
         {
-            if (gameId != "jw" && gameId != "aa" && gameId != "aa30")
+            if (gameId != "jw" && gameId != "aa" && gameId != "aa30" && gameId != "hawk")
                 throw new ArgumentOutOfRangeException(nameof(gameId));
             if (saveCurrentFields)
                 SaveSelectedGameFields();
@@ -867,6 +869,8 @@ namespace AAEmu.Launcher
             SetGameIconSelected(lGameArcheAge, isAa);
             SetGameIconSelected(lGameArcheAge30, isAa30);
             SetGameIconSelected(lGameJasonWoW, selectedGameId == "jw");
+            SetGameIconSelected(lGamePlaceholder, IsHawkSelected);
+            SetHawkVisibility(IsHawkSelected);
             lAddons.Visible = selectedGameId == "jw";
             UpdateAddonUpdateBadgeVisibility();
             if (selectedGameId == "jw")
@@ -879,8 +883,7 @@ namespace AAEmu.Launcher
                 : isAa
                     ? "Install, patch, and launch private server clients from one place."
                     : "Your world awaits.\n\nManage addons, keep your client ready, and enter JasonWoW.";
-            ApplySelectedGameToLegacySettings();
-            LoadSelectedGameFields();
+            if (!IsHawkSelected) { ApplySelectedGameToLegacySettings(); LoadSelectedGameFields(); }
             UpdateInstallStatus();
             UpdatePlayButton(serverCheckStatus, false);
             ShowPanelControls(currentPanel);
@@ -896,6 +899,7 @@ namespace AAEmu.Launcher
             {
                 if (selectedGameId == "jw")
                     return "JasonWoW";
+                if (IsHawkSelected) return "JasonHawkSkater";
                 if (selectedGameId == "aa30")
                     return "AA v3.0.3";
                 return "AA v1.2";
@@ -904,6 +908,7 @@ namespace AAEmu.Launcher
 
         private string GetSelectedGamePath()
         {
+            if (IsHawkSelected) return Hawk.ClientExecutable;
             if (selectedGameId == "jw")
                 return Setting.WoWPath;
             if (selectedGameId == "aa30")
@@ -913,6 +918,7 @@ namespace AAEmu.Launcher
 
         private string GetSelectedDownloadLocation()
         {
+            if (IsHawkSelected) return HawkNativeService.WowDownloadUrl;
             if (selectedGameId == "jw")
                 return GetWoWDownloadLocation();
             if (selectedGameId == "aa30")
@@ -1058,6 +1064,7 @@ namespace AAEmu.Launcher
 
         private void SaveSelectedGameFields()
         {
+            if (IsHawkSelected) return;
             if (!gameFieldsLoaded || lGamePath == null || eDownloadLocation == null)
                 return;
 
@@ -1581,7 +1588,7 @@ namespace AAEmu.Launcher
             panelLoginAndPatch.Location = new Point(0, 0);
             panelLoginAndPatch.Size = this.Size;
             // JasonWoW has no launcher-side account login (WoW clients authenticate in-game), so hide these credential fields for that profile.
-            var showLoginCredentials = (panelID == ShowPanelType.Login) && selectedGameId != "jw";
+            var showLoginCredentials = (panelID == ShowPanelType.Login) && IsArcheAgeSelected;
             eLogin.Visible = showLoginCredentials;
             ePassword.Visible = showLoginCredentials;
             lLogin.Visible = showLoginCredentials;
@@ -2729,6 +2736,7 @@ namespace AAEmu.Launcher
 
         private void btnPlay_Click(object sender, EventArgs e)
         {
+            if (IsHawkSelected) { _ = Hawk.PlayFromDashboard(); return; }
             if (IsSelectedGameRunning() || isClientDeltaUpdating || serverCheckStatus == serverCheck.Updating)
                 return;
 
@@ -2782,6 +2790,7 @@ namespace AAEmu.Launcher
 
         private void btnSettings_Click(object sender, EventArgs e)
         {
+            if (IsHawkSelected) { _ = Hawk.SettingsFromDashboard(); return; }
             ShowPanelControls(ShowPanelType.Settings); // Show settings
         }
 
@@ -3782,6 +3791,7 @@ namespace AAEmu.Launcher
 
         private void UpdatePlayButton(serverCheck serverState, bool isMouseOver)
         {
+            if (IsHawkSelected) { UpdateHawkPlayButton(); return; }
             if (!IsGameInstalled())
             {
                 btnPlay.Text = "INSTALL / LOCATE GAME";

@@ -69,8 +69,8 @@ namespace AAEmu.Launcher
             lPopulation = DashboardLabel("Player data unavailable", 9.5F, FontStyle.Regular, WowTheme.Text);
             lPopulation.Cursor = Cursors.Hand; lPopulation.Click += (s, e) => ShowPlayerPopover();
             lClientStatus = DashboardLabel("Checking client…", 9F, FontStyle.Regular, WowTheme.MutedText);
-            lClientStatus.Cursor = Cursors.Hand; lClientStatus.Click += LClientUpdateAction_Click;
-            rowAddons = new DashboardRow("Addons"); rowAddons.Click += LAddons_Click;
+            lClientStatus.Cursor = Cursors.Hand; lClientStatus.Click += (s, e) => { if (IsHawkSelected) _ = Hawk.PlayFromDashboard(); else LClientUpdateAction_Click(s, e); };
+            rowAddons = new DashboardRow("Addons"); rowAddons.Click += (s, e) => { if (IsHawkSelected) _ = Hawk.AssetsFromDashboard(); else LAddons_Click(s, e); };
             rowGameLocation = new DashboardRow("Game location"); rowGameLocation.Click += (s, e) => ShowGameLocationMenu();
             lLauncherVersionCompact = DashboardLabel("Launcher", 8.5F, FontStyle.Regular, WowTheme.MutedText);
             lLauncherUpdateCompact = DashboardLabel(string.Empty, 8.5F, FontStyle.Bold, WowTheme.AccentHot);
@@ -113,12 +113,16 @@ namespace AAEmu.Launcher
             gameLocationMenu.Items.Add("Locate existing installation…", null, lGamePath_Click);
         }
 
-        private void ShowGameLocationMenu() { gameLocationMenu.Items[0].Enabled = IsGameInstalled(); gameLocationMenu.Show(rowGameLocation, new Point(0, rowGameLocation.Height)); }
+        private void ShowGameLocationMenu() { if (IsHawkSelected) { _ = Hawk.SettingsFromDashboard(); return; } gameLocationMenu.Items[0].Enabled = IsGameInstalled(); gameLocationMenu.Show(rowGameLocation, new Point(0, rowGameLocation.Height)); }
         private void OpenSelectedGameFolder() { var p = GetSelectedGamePath(); if (!string.IsNullOrWhiteSpace(p) && File.Exists(p)) Process.Start("explorer.exe", "/select,\"" + p + "\""); }
 
         private void UpdateDashboardForSelectedGame()
         {
             if (lRealmStatus == null) return;
+            if (IsHawkSelected) { UpdateHawkDashboard(); return; }
+            SetHawkVisibility(false); rowAddons.Heading.Text = "ADDONS"; rowAddons.Enabled = rowGameLocation.Enabled = true;
+            lPopulation.Cursor = Cursors.Hand; lHeroTitle.Font = new Font("Palatino Linotype", 22F, FontStyle.Bold);
+            dashboardToolTip.SetToolTip(lPopulation, "View human players reported by the JasonWoW status service");
             bool wow = selectedGameId == "jw", home = currentPanel == ShowPanelType.Login;
             if (wow)
             {
@@ -153,7 +157,7 @@ namespace AAEmu.Launcher
         private void RefreshHeroNewsNavigation()
         {
             int count = newsFeed?.Data?.Count ?? 0;
-            bool visible = currentPanel == ShowPanelType.Login && count > 1;
+            bool visible = !IsHawkSelected && currentPanel == ShowPanelType.Login && count > 1;
             lNewsPrevious.Visible = lNewsNext.Visible = lNewsPosition.Visible = visible;
             if (visible) lNewsPosition.Text = (Math.Max(0, bigNewsIndex) + 1) + " / " + count;
         }
@@ -184,6 +188,7 @@ namespace AAEmu.Launcher
 
         private void UpdateClientStatusSummary()
         {
+            if (IsHawkSelected) return;
             if (lClientStatus == null) return;
             lClientStatus.Text = isClientDeltaUpdating ? "↻ Updating client…" : !IsGameInstalled() ? "Game installation not found" :
                 serverCheckStatus == serverCheck.Update ? "Update available  ·  Check now" : "✓ Client ready  ·  Check for updates";
@@ -205,6 +210,7 @@ namespace AAEmu.Launcher
 
         private void UpdateRunningState()
         {
+            if (IsHawkSelected) { UpdateHawkPlayButton(); return; }
             if (btnPlay == null) return;
             if (IsSelectedGameRunning()) { btnPlay.Text = "PLAYING"; btnPlay.Enabled = false; btnPlay.Cursor = Cursors.No; }
             else if (!btnPlay.Enabled) { btnPlay.Enabled = true; UpdatePlayButton(serverCheckStatus, false); }
@@ -230,6 +236,7 @@ namespace AAEmu.Launcher
         private void ApplyRealmDetails(RealmStatusPayload payload)
         {
             if (IsDisposed || lRealmStatus == null) return; realmDetails = payload;
+            if (IsHawkSelected) return;
             bool? online = payload?.Online ?? (serverCheckStatus == serverCheck.Online ? (bool?)true : serverCheckStatus == serverCheck.Offline ? false : (bool?)null);
             lRealmStatus.Text = online == true ? "●  REALM ONLINE" : online == false ? "●  REALM OFFLINE" : "●  REALM STATUS UNAVAILABLE";
             lRealmStatus.ForeColor = online == true ? Color.FromArgb(111, 210, 142) : online == false ? WowTheme.Danger : WowTheme.MutedText;

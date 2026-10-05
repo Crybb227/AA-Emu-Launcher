@@ -9,6 +9,17 @@ try {
     $testDir = Join-Path ([IO.Path]::GetTempPath()) ('JasonLauncherSmoke-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $testDir | Out-Null
     Copy-Item -Path 'AAEmu.Launcher/bin/Release/*' -Destination $testDir -Recurse
+    foreach ($configName in 'settings.aelcf', 'aaemu.info.aelcf') {
+        $configPath = Join-Path $testDir $configName
+        if (Test-Path -LiteralPath $configPath) {
+            $testConfig = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+            foreach ($name in 'lastLoginUser', 'lastLoginPass') {
+                if ($testConfig.PSObject.Properties.Name -contains $name) { $testConfig.$name = '' }
+            }
+            if ($testConfig.PSObject.Properties.Name -contains 'userHistory') { $testConfig.userHistory = @() }
+            [IO.File]::WriteAllText($configPath, ($testConfig | ConvertTo-Json -Depth 30))
+        }
+    }
     Copy-Item -LiteralPath (Join-Path $testDir 'AAEmu.Launcher.exe.config') -Destination (Join-Path $testDir 'Check.exe.config')
     $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
     & $compiler /nologo /target:exe "/out:$testDir\Check.exe" "/r:$testDir\AAEmu.Launcher.exe" /r:System.Drawing.dll /r:System.Windows.Forms.dll (Join-Path $PSScriptRoot 'LauncherPresentationSmoke.cs')

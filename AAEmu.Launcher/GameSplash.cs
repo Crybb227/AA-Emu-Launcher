@@ -17,6 +17,7 @@ namespace AAEmu.Launcher
                 case "jw": folder = "jwow"; break;
                 case "aa": folder = "archeage-1.2"; break;
                 case "aa30": folder = "archeage-3.0.3"; break;
+                case "hawk": folder = "hawkskater"; break;
                 default: throw new ArgumentOutOfRangeException(nameof(gameId));
             }
             var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Res", "Splashes", folder, "splash.png");

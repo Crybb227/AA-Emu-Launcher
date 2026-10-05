@@ -1,0 +1,26 @@
+[Unit]
+Description=Jason Games Cloudflare tunnel connector (publisher only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dml
+Group=dml
+LoadCredential=tunnel-token:/home/dml/.cloudflared/jason-games.token
+ExecStart=/usr/local/lib/jason-games/cloudflared --no-autoupdate tunnel --metrics 127.0.0.1:20243 run --token-file /run/credentials/jason-games-tunnel.service/tunnel-token
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

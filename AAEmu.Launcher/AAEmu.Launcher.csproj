@@ -121,6 +121,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Helpers.cs" />
+    <Compile Include="HawkSkaterForm.cs" />
+    <Compile Include="HawkNativeService.cs" />
+    <Compile Include="LauncherHawkSkater.cs" />
+    <Content Include="HawkSkater\deployment.json;HawkSkater\wow-5875.json;HawkSkater\Release\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Compile Include="GameSplash.cs" />
     <Compile Include="LauncherPresentation.cs" />
     <Compile Include="LauncherDashboard.cs" />
@@ -253,6 +259,7 @@
     <None Include="Res\GitHub_Logo_Only_Active.png" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="HawkSkater\lifecycle_launch.py"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
     <Content Include="jason-games-launcher.ico" />
     <Content Include="Res\Splashes\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
