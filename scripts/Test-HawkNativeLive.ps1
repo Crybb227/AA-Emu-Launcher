@@ -10,8 +10,9 @@ if ($ExistingWork) {
 $bytes = New-Object byte[] 32; $random = [Security.Cryptography.RandomNumberGenerator]::Create(); $random.GetBytes($bytes); $random.Dispose()
 [IO.File]::WriteAllText((Join-Path $work 'token'), [Convert]::ToBase64String($bytes))
 $openssl = 'C:\Program Files\Git\usr\bin\openssl.exe'
-& $openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout (Join-Path $work 'key.pem') -out (Join-Path $work 'cert.pem') -subj /CN=localhost -addext 'subjectAltName=DNS:localhost' 2>$null
-if ($LASTEXITCODE -ne 0) { throw 'Test certificate failed' }
+$certificate = Start-Process -FilePath $openssl -ArgumentList @('req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-keyout', (Join-Path $work 'key.pem'), '-out', (Join-Path $work 'cert.pem'), '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost') -Wait -PassThru -WindowStyle Hidden -RedirectStandardError (Join-Path $work 'certificate-build.log')
+if ($certificate.ExitCode -ne 0) { throw 'Test certificate failed' }
+$certificate.Dispose()
 & $openssl x509 -in (Join-Path $work 'cert.pem') -outform DER -out (Join-Path $work 'cert.cer')
 $python = (Get-Command python).Source
 if (Test-Path -LiteralPath (Join-Path $work 'port')) { Remove-Item -LiteralPath (Join-Path $work 'port') }

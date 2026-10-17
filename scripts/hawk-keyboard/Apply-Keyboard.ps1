@@ -45,7 +45,11 @@ Replace-Once $mod '            Job::Suspend => {' @'
 Replace-Once $mod '    keys: Res<ButtonInput<KeyCode>>,' "    keys: Res<ButtonInput<KeyCode>>,`n    mut keyboard: Local<keyboard::Keyboard>,"
 Replace-Once $mod 'keys.just_pressed(KeyCode::KeyK)' 'keyboard.camera(&keys)'
 Replace-Once $mod 'keys.just_pressed(KeyCode::KeyJ)' 'keyboard.board(&keys)'
-Replace-Once $mod "    if !drive.active {`n        return;`n    }" "    if !drive.active {`n        keyboard.clear();`n        return;`n    }"
+if ([IO.File]::ReadAllText($mod).Contains('score.clear_live();')) {
+    Replace-Once $mod "    if !drive.active {`n        score.clear_live();`n        return;`n    }" "    if !drive.active {`n        score.clear_live();`n        keyboard.clear();`n        return;`n    }"
+} else {
+    Replace-Once $mod "    if !drive.active {`n        return;`n    }" "    if !drive.active {`n        keyboard.clear();`n        return;`n    }"
+}
 Replace-Once $mod '    let input = host.transport.lock().unwrap().poll();' @'
     let focused = windows.single().is_ok_and(|window| window.focused);
     let allowed = focused && !ui.typing;
@@ -62,7 +66,14 @@ Replace-Once $mod '    let input = host.transport.lock().unwrap().poll();' @'
 '@
 Replace-Once $mod '    let pad = input.controller().is_some();' '    // pad availability describes physical hardware, not the keyboard packet.'
 Replace-Once $mod 'false => warn!("skate: no controller found; the board needs an Xbox-style pad"),' 'false => info!("skate: keyboard controls available; W/S push/brake, A/D steer, Space ollie, arrows tricks, R recover"),'
-$engine = Join-Path $CargoHome 'git\checkouts\2010-rust-rewrite-mashup-f18be4cebdaada4c\2af4154\skate\crates\skate-host\src\physics\bridge.rs'
+$manifest = [IO.File]::ReadAllText((Join-Path $Source 'crates\benilla-app\Cargo.toml'))
+if ($manifest -notmatch 'skate-host\s*=\s*\{[^}]*rev\s*=\s*"([0-9a-f]{40})"') {
+    throw 'Pinned skate-host revision is missing'
+}
+$revision = $matches[1].Substring(0, 7)
+$checkouts = @(Get-ChildItem (Join-Path $CargoHome 'git\checkouts') -Directory -Filter '2010-rust-rewrite-mashup-*' | ForEach-Object { Join-Path $_.FullName "$revision\skate\crates\skate-host\src\physics\bridge.rs" } | Where-Object { Test-Path -LiteralPath $_ })
+if ($checkouts.Count -ne 1) { throw 'Expected exactly one fetched checkout of the pinned skate engine' }
+$engine = $checkouts[0]
 Replace-Once $engine "impl InputFrame {`n" @'
 impl InputFrame {
     /// JasonHawkSkater fork: feed digital keyboard input through the same raw Pad converter.

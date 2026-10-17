@@ -24,7 +24,7 @@ namespace AAEmu.Launcher
     {
         public int schema = 1;
         public string platform = "windows-x86_64", manifestUrl = "", skateManifestUrl = "", lifecycleUrl = "", authUrl = "", discordUrl = "";
-        public string authAddress = "24.16.12.90:13724", worldAddress = "24.16.12.90:18085";
+        public string authAddress = "skate.jmservers.com:13724", worldAddress = "skate.jmservers.com:18085";
         public bool publicDownloads, publicSessions;
         public static HawkDeployment Load(string file)
         {

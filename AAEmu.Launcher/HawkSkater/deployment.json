@@ -3,11 +3,11 @@
   "platform": "windows-x86_64",
   "manifestUrl": "https://games-api.jmservers.com/v1/manifest",
   "skateManifestUrl": "https://games-api.jmservers.com/v1/skate/manifest",
-  "lifecycleUrl": "https://games-api.jmservers.com",
+  "lifecycleUrl": "",
   "publicDownloads": true,
   "publicSessions": true,
   "authUrl": "",
   "discordUrl": "",
-  "authAddress": "24.16.12.90:13724",
-  "worldAddress": "24.16.12.90:18085"
+  "authAddress": "skate.jmservers.com:13724",
+  "worldAddress": "skate.jmservers.com:18085"
 }

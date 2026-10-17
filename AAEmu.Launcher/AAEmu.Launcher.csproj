@@ -130,6 +130,7 @@
     <Compile Include="GameSplash.cs" />
     <Compile Include="LauncherPresentation.cs" />
     <Compile Include="LauncherDashboard.cs" />
+    <Compile Include="ServerOnDemand.cs" />
     <Compile Include="ClientDeltaUpdater.cs" />
     <Compile Include="DiscordPresenceService.cs" />
     <Compile Include="AddonManager.cs" />

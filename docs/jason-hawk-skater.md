@@ -109,8 +109,8 @@ Asset ID `613491723`, archive size `20281425`, SHA-256
 GitHub metadata and an actual download through the broker fetch code both matched.
 The repository remained private before/after upload. WoW assets were not uploaded.
 The keyboard-enabled native runtime is in private prerelease
-`client-windows-2026.10.05.6`, asset ID `613729452`, 88,194,187 archive bytes,
-SHA-256 `1487942b011a1a3dcd30883e7aa86b62f4342a123370cf45f5906361a8c4b491`.
+`client-windows-2026.10.07.1`, asset ID `620643601`, 88,226,512 archive bytes,
+SHA-256 `2c2e8323fe744044f83120b6144803bf5317cee40f0db0694b443fe74a0a2239`.
 
 The broker exposes `/v1/skate/manifest` and hash-allowlisted `/v1/skate/files/<sha256>`.
 `skateManifest`/`skateArchive` are separate from the native runtime release, so no
@@ -148,8 +148,8 @@ the launcher cannot rewrite the realm list.
 Ship reviewed manifest/lifecycle/auth URLs and an optional Discord invite in
 `HawkSkater/deployment.json`. The checked-in default now uses the verified public
 download/attach gateway with no player sign-in. The configured game addresses are
-`24.16.12.90:13724` and `:18085`; the server is woken only through Discord.
-Launcher v0.6.0.3 is the publisher-authorized launcher release. External-PC,
+`skate.jmservers.com:13724` and `:18085`; the server is woken only through Discord.
+Launcher v0.6.0.4 is the publisher-authorized launcher release. External-PC,
 physical-controller/audio testing and the publisher's final third-party
 distribution review remain outstanding; release publication is not evidence
 that these acceptance checks have passed.

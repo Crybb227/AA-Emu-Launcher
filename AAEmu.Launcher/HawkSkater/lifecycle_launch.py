@@ -28,7 +28,7 @@ def main():
     sid = str(uuid.uuid4())
     def call(action):
         if not url:
-            return dict(ready=True, auth_address=config.get('host', '24.16.12.90:13724'))
+            return dict(ready=True, auth_address=config.get('host', 'skate.jmservers.com:13724'))
         request = urllib.request.Request(url+'/v1/'+action,
             data=json.dumps(dict(session_id=sid)).encode(),
             headers={'Authorization': 'Bearer '+token, 'Content-Type': 'application/json'})

@@ -11,7 +11,7 @@ class HawkProductionLive {
   if(Path.GetDirectoryName(root).TrimEnd('\\')!=Path.GetTempPath().TrimEnd('\\')||!System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(root),"^HawkPublishedPack-[a-f0-9]{32}$"))throw new Exception("Use only a clean-install test-owned workspace");
   var content=Path.Combine(args[0],"HawkSkater");
   var deployment=HawkDeployment.Load(Path.Combine(content,"deployment.json"));
-  if(!deployment.publicDownloads||!deployment.publicSessions||deployment.lifecycleUrl!="https://games-api.jmservers.com")throw new Exception("Expected reviewed public gateway configuration");
+  if(!deployment.publicDownloads||!deployment.publicSessions||deployment.lifecycleUrl!=""||deployment.authAddress!="skate.jmservers.com:13724"||deployment.worldAddress!="skate.jmservers.com:18085")throw new Exception("Expected remote-player deployment without a lifecycle endpoint");
   bool sessionFailure=false;
   var service=new HawkNativeService(root,Path.Combine(content,"Release"),Path.Combine(content,"wow-5875.json"),deployment,(s,p)=>{if(s.StartsWith("Session heartbeat unavailable")||s.StartsWith("Session release unavailable"))sessionFailure=true;if(!s.StartsWith("Verified"))Console.WriteLine(s);});
   service.ImportWow(args[2],CancellationToken.None);
@@ -27,6 +27,6 @@ class HawkProductionLive {
   service.Launch("",account,password,CancellationToken.None).GetAwaiter().GetResult();observer.GetAwaiter().GetResult();
   var log=File.ReadAllText(Path.Combine(root,"client.log"));
   if(sessionFailure||log.IndexOf("net: in world as",StringComparison.OrdinalIgnoreCase)<0||log.IndexOf("skate: on the board",StringComparison.OrdinalIgnoreCase)<0||log.IndexOf("panicked",StringComparison.OrdinalIgnoreCase)>=0||File.Exists(Path.Combine(root,".session.json")))throw new Exception("Production gameplay/cleanup not proven; inspect test log");
-  Console.WriteLine("PASS public HTTPS launch, native world entry with Classic 1.8 MPQs and the reduced Skate pack, board activation and clean client lease release. Evidence: "+root);
+  Console.WriteLine("PASS public HTTPS download, direct TCP world entry with Classic 1.8 MPQs and the reduced Skate pack, and board activation without a remote lifecycle session. Evidence: "+root);
  }
 }

@@ -49,7 +49,7 @@ namespace AAEmu.Launcher
             public const string DefaultAAClientDownloadLocation = "https://github.com/Crybb227/AA-Emu-Client-AA";
             public const string DefaultAA30ClientDownloadLocation = "https://drive.google.com/file/d/1KQE-OIgGaOSqr69MufLe8R6odaIK8nit/view";
             public const string DefaultWoWClientDownloadLocation = "https://btground.dedyn.io/chmi/additional_patches_for_335a.zip";
-            public const string DefaultWoWStatusUrl = "http://localhost:8787/api/launcher/status";
+            public const string DefaultWoWStatusUrl = "http://wow.jmservers.com:8787/api/launcher/status";
             public const string LegacyAAClientGoogleDriveLocation = "https://drive.google.com/drive/folders/1_pIBVHIm1YFal-nteGaVuXjTv3Yrsv4Q";
 
             [JsonProperty("configVersion", NullValueHandling = NullValueHandling.Ignore)]
@@ -3908,6 +3908,7 @@ namespace AAEmu.Launcher
         {
             StopDiscordPresenceIfGameExited();
             UpdateRunningState();
+            _ = RefreshRealmDetailsAsync(false);
 
             if ((aaLauncher != null) && (aaLauncher.RunningProcess != null) && (checkGameIsRunning == true))
             {

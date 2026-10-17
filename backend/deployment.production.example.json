@@ -5,7 +5,9 @@
   "publicSessions": true,
   "manifestUrl": "https://games-api.jmservers.com/v1/manifest",
   "skateManifestUrl": "https://games-api.jmservers.com/v1/skate/manifest",
-  "lifecycleUrl": "https://games-api.jmservers.com",
+  "lifecycleUrl": "",
   "authUrl": "",
-  "discordUrl": ""
+  "discordUrl": "",
+  "authAddress": "skate.jmservers.com:13724",
+  "worldAddress": "skate.jmservers.com:18085"
 }

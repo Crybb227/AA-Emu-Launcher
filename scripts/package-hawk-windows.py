@@ -54,7 +54,7 @@ for package in metadata['packages']:
     for file in directory.rglob('*'):
         if file.is_file() and any(term in file.name.lower() for term in ('license', 'copying', 'notice', 'ofl')) and file.suffix.lower() not in ('.rs', '.c', '.h', '.py', '.sh', '.toml', '.lock'):
             copy(file, Path('licenses/rust') / (package['name'] + '-' + package['version']) / file.relative_to(directory))
-checkout = next((a.build / 'cargo/git/checkouts/2010-rust-rewrite-mashup-f18be4cebdaada4c').iterdir())
+checkout = Path(next(package['manifest_path'] for package in metadata['packages'] if package['name'] == 'skate-host')).parents[3]
 for name in ('LICENSE', 'NOTICE'): copy(checkout / name, 'licenses/mashup-' + name)
 keyboard_source = repo / 'scripts/hawk-keyboard'
 for file in keyboard_source.rglob('*'):

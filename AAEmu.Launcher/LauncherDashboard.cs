@@ -6,6 +6,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -57,7 +58,9 @@ namespace AAEmu.Launcher
         private RealmStatusPayload realmDetails;
         private CancellationTokenSource realmStatusCancellation;
         private bool realmStatusRequestInFlight;
-        private DateTime lastRealmDetailsCheckUtc = DateTime.MinValue;
+        private DateTime nextRealmDetailsCheckUtc = DateTime.MinValue;
+        private int realmStatusRateLimitCount;
+        private static readonly TimeSpan RealmStatusPollInterval = TimeSpan.FromSeconds(20);
 
         private void InitializeDashboard()
         {
@@ -219,15 +222,36 @@ namespace AAEmu.Launcher
         private async Task RefreshRealmDetailsAsync(bool force)
         {
             if (selectedGameId != "jw" || realmStatusRequestInFlight) return;
-            if (!force && (DateTime.UtcNow - lastRealmDetailsCheckUtc).TotalSeconds < 120) return;
-            lastRealmDetailsCheckUtc = DateTime.UtcNow; realmStatusRequestInFlight = true;
+            if (!force && DateTime.UtcNow < nextRealmDetailsCheckUtc) return;
+            nextRealmDetailsCheckUtc = DateTime.UtcNow.Add(RealmStatusPollInterval); realmStatusRequestInFlight = true;
             realmStatusCancellation?.Cancel(); realmStatusCancellation?.Dispose(); realmStatusCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             try
             {
                 if (string.IsNullOrWhiteSpace(Setting.WoWStatusUrl)) { ApplyRealmDetails(null); return; }
                 using (var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) })
                 using (var response = await client.GetAsync(Setting.WoWStatusUrl, realmStatusCancellation.Token))
-                { response.EnsureSuccessStatusCode(); ApplyRealmDetails(JsonConvert.DeserializeObject<RealmStatusPayload>(await response.Content.ReadAsStringAsync())); }
+                {
+                    if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
+                    {
+                        Trace.WriteLine("JasonWoW status is temporarily unavailable (HTTP 503).");
+                        ApplyRealmDetails(null);
+                        return;
+                    }
+                    if ((int)response.StatusCode == 429)
+                    {
+                        realmStatusRateLimitCount = Math.Min(realmStatusRateLimitCount + 1, 5);
+                        var retryAfter = response.Headers.RetryAfter?.Delta;
+                        var backoff = retryAfter ?? TimeSpan.FromSeconds(20 * Math.Pow(2, realmStatusRateLimitCount));
+                        if (backoff < RealmStatusPollInterval) backoff = RealmStatusPollInterval;
+                        if (backoff > TimeSpan.FromMinutes(10)) backoff = TimeSpan.FromMinutes(10);
+                        nextRealmDetailsCheckUtc = DateTime.UtcNow.Add(backoff);
+                        Trace.WriteLine("JasonWoW status rate limited; retrying after " + backoff + ".");
+                        return;
+                    }
+                    response.EnsureSuccessStatusCode();
+                    realmStatusRateLimitCount = 0;
+                    ApplyRealmDetails(JsonConvert.DeserializeObject<RealmStatusPayload>(await response.Content.ReadAsStringAsync()));
+                }
             }
             catch (Exception ex) { Trace.WriteLine("JasonWoW status service unavailable: " + ex.Message); ApplyRealmDetails(null); }
             finally { realmStatusRequestInFlight = false; }
