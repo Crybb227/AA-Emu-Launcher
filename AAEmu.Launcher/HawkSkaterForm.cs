@@ -19,6 +19,8 @@ namespace AAEmu.Launcher
         readonly FlowLayoutPanel actions = new FlowLayoutPanel();
         readonly ProgressBar progress = new ProgressBar();
         readonly string settings = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JasonGamesLauncher", "hawk-windows.json");
+        readonly string launcherLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JasonGamesLauncher", "launcher.log");
+        readonly object logSync = new object();
         readonly HawkDeployment deployment;
         HawkNativeService game;
         string root, token = "";
@@ -34,6 +36,7 @@ namespace AAEmu.Launcher
         public string InstallRoot { get { return root; } }
         public string ClientExecutable { get { return game.IsInstalled ? Path.Combine(game.ReleaseDirectory, "bin", "benilla.exe") : ""; } }
         public Task PlayFromDashboard() { return Perform(InstallPlay); }
+        public Task CheckForUpdatesFromDashboard() { return Perform(CheckForUpdates); }
         public Task SettingsFromDashboard() { return Perform(Settings); }
         public Task AssetsFromDashboard() { return Perform(async () => { await AssetWizard(); }); }
         public Task AccountFromDashboard() { return Perform(Account); }
@@ -66,7 +69,9 @@ namespace AAEmu.Launcher
                 try { var saved = JsonConvert.DeserializeObject<LocalSettings>(File.ReadAllText(settings)); if (saved != null && !string.IsNullOrEmpty(saved.root)) root = saved.root; }
                 catch (Exception) { Log("Saved install location could not be read; using the Windows default.", 0); }
             if (!diagnostic) token = HawkCredential.Read("JasonGamesLauncher/JasonHawkSkater/windows-access");
-            game = new HawkNativeService(root, Path.Combine(content, "Release"), Path.Combine(content, "wow-5875.json"), deployment, Log);
+            game = new HawkNativeService(root, Path.Combine(content, "Release"), Path.Combine(content, "wow-5875.json"), deployment, Log, null, LogDiagnostic);
+            LogDiagnostic("JasonHawkSkater initialized. Game path: " + root);
+            LogDiagnostic("Deployment manifest: " + deployment.manifestUrl + "; Skate manifest: " + deployment.skateManifestUrl);
             RefreshState();
             FormClosing += (s, e) => { if (busy) { e.Cancel = true; MessageBox.Show(this, game.IsRunning ? "Exit the game before closing the launcher." : "Wait for the current operation to finish before closing.", "JasonHawkSkater"); } };
         }
@@ -83,10 +88,23 @@ namespace AAEmu.Launcher
         }
         void Log(string text, int value)
         {
-            if (DialogOwner != null) { StatusChanged?.Invoke(text, value); return; }
+            if (DialogOwner != null) { LogDiagnostic(text); StatusChanged?.Invoke(text, value); return; }
             if (IsDisposed) return;
             if (InvokeRequired) { BeginInvoke(new Action(() => Log(text, value))); return; }
+            LogDiagnostic(text);
             status.AppendText(text + Environment.NewLine); progress.Value = Math.Max(0, Math.Min(100, value));
+        }
+        void LogDiagnostic(string text)
+        {
+            try
+            {
+                lock (logSync)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(launcherLog));
+                    File.AppendAllText(launcherLog, DateTimeOffset.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffzzz") + " [JasonHawkSkater] " + text + Environment.NewLine, Encoding.UTF8);
+                }
+            }
+            catch (Exception) { }
         }
         async Task Perform(Func<Task> action)
         {
@@ -94,7 +112,7 @@ namespace AAEmu.Launcher
             try { await action(); }
             catch (OperationCanceledException) { Log("Cancelled. Verified downloads can resume next time.", 0); }
             catch (HawkAccessDeniedException ex) { token = ""; HawkCredential.Write("JasonGamesLauncher/JasonHawkSkater/windows-access", ""); Log(ex.Message, 0); }
-            catch (Exception ex) { Log(ex.Message, 0); }
+            catch (Exception ex) { LogDiagnostic("Operation failed: " + ex); Log(ex.Message + "\r\nDetails were written to " + launcherLog, 0); }
             finally { operation.Dispose(); operation = null; busy = false; primary.Enabled = true; actions.Enabled = true; RefreshState(); StateChanged?.Invoke(); }
         }
         async Task EnsureSignIn()
@@ -107,12 +125,22 @@ namespace AAEmu.Launcher
         }
         async Task InstallPlay()
         {
+            if (!game.IsInstalled || !game.HasWow || !game.HasSkate)
+            {
+                await EnsureSignIn(); Log("Installing missing client components…", 0);
+                await Task.Run(() => game.Install(token, operation.Token));
+                await Task.Run(() => game.InstallSkateContent(token, operation.Token));
+                if (!game.HasWow) await Task.Run(() => game.DownloadWowAssets(operation.Token));
+                if ((!game.HasWow || !game.HasSkate) && !await AssetWizard()) return;
+            }
+            var account = ReadLogin(); await Task.Run(() => game.Launch(token, account.user, account.password, operation.Token));
+        }
+        async Task CheckForUpdates()
+        {
             await EnsureSignIn(); Log("Checking for client updates…", 0);
             await Task.Run(() => game.Install(token, operation.Token));
             await Task.Run(() => game.InstallSkateContent(token, operation.Token));
-            if (!game.HasWow) await Task.Run(() => game.DownloadWowAssets(operation.Token));
-            if ((!game.HasWow || !game.HasSkate) && !await AssetWizard()) return;
-            var account = ReadLogin(); await Task.Run(() => game.Launch(token, account.user, account.password, operation.Token));
+            Log("Update check complete.", 100);
         }
         HawkLogin ReadLogin()
         {
@@ -171,7 +199,8 @@ namespace AAEmu.Launcher
                     {
                         if (picker.ShowDialog(UiOwner) != DialogResult.OK) return;
                         var folder = Path.Combine(picker.SelectedPath, "JasonHawkSkater"); var content = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "HawkSkater");
-                        game = new HawkNativeService(folder, Path.Combine(content, "Release"), Path.Combine(content, "wow-5875.json"), deployment, Log); root = folder;
+                        game = new HawkNativeService(folder, Path.Combine(content, "Release"), Path.Combine(content, "wow-5875.json"), deployment, Log, null, LogDiagnostic); root = folder;
+                        LogDiagnostic("Game path changed to: " + root);
                         Directory.CreateDirectory(Path.GetDirectoryName(settings)); File.WriteAllText(settings, JsonConvert.SerializeObject(new LocalSettings { root = root }));
                         Log("Install location changed. Your previous installation was not moved or deleted.", 0);
                     }

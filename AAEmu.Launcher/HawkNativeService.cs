@@ -43,15 +43,16 @@ namespace AAEmu.Launcher
         readonly string packageRoot, profilePath;
         readonly HawkDeployment deployment;
         readonly Action<string, int> report;
+        readonly Action<string> diagnostic;
         readonly Func<HttpClient> httpFactory;
         public bool IsInstalled { get { return File.Exists(Path.Combine(Root, "current.json")); } }
         public bool HasWow { get { return File.Exists(Path.Combine(Root, "wow.json")); } }
         public bool HasSkate { get { return File.Exists(Path.Combine(Root, "skate.json")); } }
         public bool IsRunning { get; private set; }
         public bool RequiresSignIn { get { return (!deployment.publicDownloads && (!string.IsNullOrEmpty(deployment.manifestUrl) || !string.IsNullOrEmpty(deployment.skateManifestUrl))) || (!deployment.publicSessions && !string.IsNullOrEmpty(deployment.lifecycleUrl)); } }
-        public HawkNativeService(string root, string package, string profile, HawkDeployment c, Action<string, int> progress, Func<HttpClient> transport = null)
+        public HawkNativeService(string root, string package, string profile, HawkDeployment c, Action<string, int> progress, Func<HttpClient> transport = null, Action<string> log = null)
         {
-            Root = Path.GetFullPath(root); packageRoot = Path.GetFullPath(package); profilePath = profile; deployment = c; report = progress; httpFactory = transport;
+            Root = Path.GetFullPath(root); packageRoot = Path.GetFullPath(package); profilePath = profile; deployment = c; report = progress; httpFactory = transport; diagnostic = log ?? delegate { };
             if (Root == Path.GetPathRoot(Root) || Root.StartsWith(@"\\", StringComparison.Ordinal) || Root.IndexOf(':', 2) >= 0)
                 throw new Exception("Choose a local Windows game folder.");
         }
@@ -161,7 +162,7 @@ namespace AAEmu.Launcher
                 return Encoding.UTF8.GetString(output.ToArray());
             }
         }
-        async Task<HttpResponseMessage> Get(HttpClient client, Uri uri, string token, long start, CancellationToken cancel)
+        async Task<HttpResponseMessage> Get(HttpClient client, Uri uri, string token, long start, string destination, CancellationToken cancel)
         {
             var origin = uri;
             for (int count = 0; count < 5; count++)
@@ -170,7 +171,16 @@ namespace AAEmu.Launcher
                 {
                     if (!string.IsNullOrEmpty(token)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                     if (start > 0) request.Headers.Range = new RangeHeaderValue(start, null);
-                    var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false);
+                    diagnostic("HTTP GET " + uri + " -> " + destination + (start > 0 ? " (resume at " + start + " bytes)" : ""));
+                    HttpResponseMessage response;
+                    try { response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex)
+                    {
+                        diagnostic("HTTP exception for " + uri + " -> " + destination + ": " + ex);
+                        throw new HawkDownloadException(uri, destination, null, ex);
+                    }
+                    diagnostic("HTTP " + (int)response.StatusCode + " " + response.ReasonPhrase + " for " + uri + " -> " + destination);
                     if ((int)response.StatusCode >= 300 && (int)response.StatusCode < 400)
                     {
                         var next = response.Headers.Location == null ? null : new Uri(uri, response.Headers.Location);
@@ -179,7 +189,14 @@ namespace AAEmu.Launcher
                         uri = next; continue;
                     }
                     if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden) { response.Dispose(); throw new HawkAccessDeniedException(); }
-                    if (!response.IsSuccessStatusCode) { response.Dispose(); throw new Exception("Download failed. Retry Install / Play to resume."); }
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var status = response.StatusCode; var reason = response.ReasonPhrase;
+                        string detail = "";
+                        try { detail = (await Body(response.Content, 4096, cancel).ConfigureAwait(false)).Trim(); } catch (Exception) { }
+                        response.Dispose();
+                        throw new HawkDownloadException(uri, destination, status, null, reason, detail);
+                    }
                     return response;
                 }
             }
@@ -193,10 +210,14 @@ namespace AAEmu.Launcher
             var url = Https(f.url);
             if (!publicAsset && !new[] { deployment.manifestUrl, deployment.skateManifestUrl }.Where(s => !string.IsNullOrEmpty(s)).Any(s => SameOrigin(Https(s), url))) throw new Exception("Release file is outside the publisher's download host.");
             if (publicAsset) token = ""; // Never send private launcher credentials to an asset mirror.
-            using (var response = await Get(client, url, token, offset, cancel).ConfigureAwait(false))
+            using (var response = await Get(client, url, token, offset, path, cancel).ConfigureAwait(false))
             {
                 bool resumed = offset > 0 && response.StatusCode == HttpStatusCode.PartialContent;
-                if (resumed && (response.Content.Headers.ContentRange == null || response.Content.Headers.ContentRange.From != offset || response.Content.Headers.ContentRange.Length != f.size)) throw new Exception("Invalid resumed download range.");
+                if (resumed && (response.Content.Headers.ContentRange == null || response.Content.Headers.ContentRange.From != offset || response.Content.Headers.ContentRange.Length != f.size))
+                {
+                    response.Dispose(); File.Delete(path);
+                    throw new Exception("The server returned an invalid resume range for " + f.path + ". The partial download was cleared; retry to start it again.");
+                }
                 if (!resumed) offset = 0;
                 using (var input = await response.Content.ReadAsStreamAsync().ConfigureAwait(false))
                 using (var output = new FileStream(path, resumed ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None, 1024 * 1024, true))
@@ -235,7 +256,7 @@ namespace AAEmu.Launcher
             {
                 string json;
                 if (!string.IsNullOrEmpty(deployment.manifestUrl))
-                    using (var response = await Get(client, Https(deployment.manifestUrl), token, 0, cancel).ConfigureAwait(false))
+                    using (var response = await Get(client, Https(deployment.manifestUrl), token, 0, "client manifest (memory)", cancel).ConfigureAwait(false))
                     { json = await Body(response.Content, 8 * 1024 * 1024, cancel).ConfigureAwait(false); }
                 else
                 {
@@ -307,7 +328,7 @@ namespace AAEmu.Launcher
                 if (HasSkate && (string)JObject.Parse(File.ReadAllText(Path.Combine(Root, "skate.json")))["source"] != "publisher") return;
                 var bundled = Path.Combine(Path.GetDirectoryName(packageRoot), "SkateContent"); string json;
                 bool remote = !string.IsNullOrEmpty(deployment.skateManifestUrl);
-                if (remote) using (var response = await Get(client, Https(deployment.skateManifestUrl), token, 0, cancel).ConfigureAwait(false)) json = await Body(response.Content, 8 * 1024 * 1024, cancel).ConfigureAwait(false);
+                if (remote) using (var response = await Get(client, Https(deployment.skateManifestUrl), token, 0, "Skate content manifest (memory)", cancel).ConfigureAwait(false)) json = await Body(response.Content, 8 * 1024 * 1024, cancel).ConfigureAwait(false);
                 else { var manifest = Path.Combine(bundled, "manifest.json"); if (!File.Exists(manifest)) return; json = File.ReadAllText(manifest); }
                 var m = ValidateSkateManifest(json);
                 if (!repair && HasSkate && (string)JObject.Parse(File.ReadAllText(Path.Combine(Root, "skate.json")))["version"] == m.version && m.files.All(f => Valid(Under(AssetDirectory("skate"), f.path), f))) return;
@@ -609,5 +630,16 @@ namespace AAEmu.Launcher
         }
     }
     public sealed class HawkAccessDeniedException : Exception { public HawkAccessDeniedException() : base("Access denied or revoked. Sign in again through Discord.") { } }
+    public sealed class HawkDownloadException : Exception
+    {
+        public Uri Url { get; private set; }
+        public string Destination { get; private set; }
+        public HttpStatusCode? StatusCode { get; private set; }
+        public HawkDownloadException(Uri url, string destination, HttpStatusCode? status, Exception inner, string reason = null, string detail = null)
+            : base(status.HasValue
+                ? "Download request failed with HTTP " + (int)status.Value + (string.IsNullOrWhiteSpace(reason) ? "" : " " + reason) + "." + (string.IsNullOrWhiteSpace(detail) ? "" : " Server response: " + detail) + "\r\nURL: " + url + "\r\nDestination: " + destination + "\r\nThe publisher download service may be unavailable; retry after it is restored."
+                : "Download request could not reach the publisher.\r\nURL: " + url + "\r\nDestination: " + destination + "\r\n" + (inner == null ? "Unknown network error." : inner.Message), inner)
+        { Url = url; Destination = destination; StatusCode = status; }
+    }
     public sealed class HawkSessionExpiredException : Exception { public HawkSessionExpiredException() : base("Session expired; reattach to the Discord-started server.") { } }
 }

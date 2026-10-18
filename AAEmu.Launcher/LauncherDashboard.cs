@@ -72,7 +72,7 @@ namespace AAEmu.Launcher
             lPopulation = DashboardLabel("Player data unavailable", 9.5F, FontStyle.Regular, WowTheme.Text);
             lPopulation.Cursor = Cursors.Hand; lPopulation.Click += (s, e) => ShowPlayerPopover();
             lClientStatus = DashboardLabel("Checking client…", 9F, FontStyle.Regular, WowTheme.MutedText);
-            lClientStatus.Cursor = Cursors.Hand; lClientStatus.Click += (s, e) => { if (IsHawkSelected) _ = Hawk.PlayFromDashboard(); else LClientUpdateAction_Click(s, e); };
+            lClientStatus.Cursor = Cursors.Hand; lClientStatus.Click += (s, e) => { if (IsHawkSelected) _ = Hawk.CheckForUpdatesFromDashboard(); else LClientUpdateAction_Click(s, e); };
             rowAddons = new DashboardRow("Addons"); rowAddons.Click += (s, e) => { if (IsHawkSelected) _ = Hawk.AssetsFromDashboard(); else LAddons_Click(s, e); };
             rowGameLocation = new DashboardRow("Game location"); rowGameLocation.Click += (s, e) => ShowGameLocationMenu();
             lLauncherVersionCompact = DashboardLabel("Launcher", 8.5F, FontStyle.Regular, WowTheme.MutedText);
